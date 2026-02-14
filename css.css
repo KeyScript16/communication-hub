@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+}
+
+#auth-container, #main-content {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    padding: 40px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    width: 350px;
+    text-align: center;
+}
+
+h1 {
+    margin-bottom: 20px;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    outline: none;
+    transition: 0.3s;
+}
+
+input:focus {
+    border-color: #4ecca3;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 15px;
+    border: none;
+    border-radius: 8px;
+    background: #4ecca3;
+    color: #1a1a2e;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    background: #45b291;
+    transform: translateY(-2px);
+}
+
+p {
+    margin-top: 15px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+a {
+    color: #4ecca3;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+#admin-tag {
+    background: rgba(255, 215, 0, 0.2);
+    color: gold;
+    padding: 5px 10px;
+    border-radius: 5px;
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 12px;
+    text-transform: uppercase;
+}

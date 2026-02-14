@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <title>Dashboard</title>
+</head>
+<body>
+    <div id="main-content" style="width: 450px;">
+        <h1>Dashboard</h1>
+        <p>Welcome, <span id="display-name"></span></p>
+        
+        <!-- Section for regular users to change their password -->
+        <div id="settings-section" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+            <button onclick="changePassword()" style="background: rgba(255,255,255,0.1); color: #4ecca3; border: 1px solid #4ecca3;">Change Password</button>
+        </div>
+
+        <!-- Section visible ONLY to you (Admin) -->
+        <div id="admin-section" style="display: none; margin-top: 20px;">
+            <div id="admin-tag">Administrator</div>
+            <h3 style="text-align: left; margin: 15px 0 5px;">Manage Users:</h3>
+            <ul id="user-list" style="list-style: none; text-align: left; background: rgba(0,0,0,0.2); border-radius: 10px; padding: 10px;"></ul>
+        </div>
+
+        <!-- FRIENDS LIST AREA -->
+        <div id="friends-list" style="margin-top: 20px; text-align: left;"></div>
+
+        <!-- BUTTONS AT THE BOTTOM -->
+        <button onclick="addFriend()" style="margin-top: 20px; background: #4ecca3; color: #1a1a2e;">Add New Friend</button>
+        <button onclick="logout()" style="margin-top: 10px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">Logout</button>
+    </div>
+
+    <script>
+const userData = sessionStorage.getItem("currentUser");
+if (!userData) window.location.href = 'index.html';
+const user = JSON.parse(userData);
+document.getElementById('display-name').innerText = user.username;
+
+// Explicitly point to localhost for cross-browser stability
+const socket = io('http://localhost:3000'); 
+socket.emit('go-online', user.email);
+
+socket.on('update-online-list', async (onlineEmails) => {
+    const listDiv = document.getElementById('friends-list');
+    listDiv.innerHTML = ""; 
+
+    const response = await fetch('http://localhost:3000/get-data');
+    const allUsers = await response.json();
+    const me = allUsers.find(u => u.email === user.email);
+
+    if (me) {
+        // --- REQUESTS ---
+        if (me.requests && me.requests.length > 0) {
+            let html = "<div style='background:rgba(78,204,163,0.1); padding:10px; border-radius:10px; margin-bottom:20px;'><h3>Requests:</h3>";
+            me.requests.forEach(s => {
+                html += `<div style='display:flex; justify-content:space-between; margin-top:5px;'><span>${s}</span><button onclick="acceptFriend('${s}')" style='width:auto; padding:2px 10px;'>Accept</button></div>`;
+            });
+            listDiv.innerHTML += html + "</div>";
+        }
+        // --- FRIENDS ---
+        listDiv.innerHTML += "<h3>Friends:</h3>";
+        (me.friends || []).forEach(f => {
+            const online = onlineEmails.includes(f);
+            const row = document.createElement('div');
+            row.style.margin = "10px 0";
+            row.innerHTML = `<span>${f} ${online ? '●' : '○'}</span> ${online ? `<button onclick="startChat('${f}')" style='width:auto; padding:5px;'>Chat</button>` : ''}`;
+            listDiv.appendChild(row);
+        });
+    }
+});
+
+async function addFriend() {
+    const target = prompt("Friend's email:");
+    if (!target || target === user.email) return;
+    const res = await fetch('http://localhost:3000/get-data');
+    let users = await res.json();
+    let friend = users.find(u => u.email === target);
+    if (friend) {
+        friend.requests = friend.requests || [];
+        if (!friend.requests.includes(user.email)) {
+            friend.requests.push(user.email);
+            await fetch('http://localhost:3000/save-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
+            alert("Sent!");
+            socket.emit('go-online', user.email); // Force refresh across browsers
+        }
+    } else alert("Not found");
+}
+
+async function acceptFriend(sender) {
+    const res = await fetch('http://localhost:3000/get-data');
+    let users = await res.json();
+    let me = users.find(u => u.email === user.email);
+    let them = users.find(u => u.email === sender);
+    me.friends = me.friends || []; them.friends = them.friends || [];
+    me.friends.push(sender); them.friends.push(user.email);
+    me.requests = me.requests.filter(r => r !== sender);
+    await fetch('http://localhost:3000/save-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
+    location.reload();
+}
+
+function startChat(f) {
+    alert("Asking " + f + "...");
+    socket.emit('request-chat', { to: f, fromName: user.username, fromEmail: user.email });
+}
+
+socket.on('chat-requested', (d) => {
+    playBell();
+    if(confirm(d.fromName + " wants to chat!")) {
+        socket.emit('chat-response', { to: d.fromEmail, fromEmail: user.email, accepted: true });
+        window.location.href = `chat.html?with=${d.fromEmail}`;
+    } else {
+        socket.emit('chat-response', { to: d.fromEmail, fromEmail: user.email, accepted: false });
+    }
+});
+
+socket.on('start-chat-confirmed', (d) => {
+    if(d.accepted) window.location.href = `chat.html?with=${d.fromEmail}`;
+    else alert("Declined.");
+});
+
+function playBell() {
+    try {
+        const c = new (window.AudioContext || window.webkitAudioContext)();
+        const o = c.createOscillator(); const g = c.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(880, c.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.2);
+        o.connect(g); g.connect(c.destination);
+        o.start(); o.stop(c.currentTime + 0.2);
+    } catch(e) {}
+}
+
+function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css.css">
+    <title>Login</title>
+</head>
+<body>
+    <div id="auth-container">
+        <h1>Login</h1>
+        <input type="email" id="login-email" placeholder="Email">
+        <input type="password" id="login-pass" placeholder="Password">
+        <button onclick="login()">Login</button>
+		<p><a href="#" onclick="forgotPassword()">Forgot Password?</a></p>
+
+<script>
+function forgotPassword() {
+    alert("Please contact the Administrator (Ben) to reset your password.");
+}
+</script>
+
+        <p><a href="index.html">Back to Hub</a></p>
+    </div>
+
+    <script>
+async function login() {
+    const email = document.getElementById('login-email').value;
+    const pass = document.getElementById('login-pass').value;
+    
+    // 1. ADMIN CHECK (Hardcoded for you)
+    if (email === "Fordbenjamin2016@gmail.com" && pass === "Admin") {
+        sessionStorage.setItem("currentUser", JSON.stringify({email: email, username: "Ben"}));
+        window.location.href = 'dashboard.html';
+        return;
+    }
+
+    // 2. SERVER CHECK (Talking to your Node.js Database)
+    try {
+        const response = await fetch('http://localhost:3000/get-data');
+        const allUsers = await response.json(); // This gets the list from db.json
+
+        // Find if any user in the list matches the email and password
+        const userFound = allUsers.find(u => u.email === email && u.password === pass);
+
+        if (userFound) {
+            sessionStorage.setItem("currentUser", JSON.stringify({
+                email: userFound.email, 
+                username: userFound.username
+            }));
+            window.location.href = 'dashboard.html';
+        } else {
+            alert("Account not found or wrong password.");
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Server is offline! Make sure your black window says 'Server is LIVE'.");
+    }
+}
+// This makes the 'Enter' key work too!
+document.addEventListener("keypress", (e) => { if(e.key === "Enter") login(); });
+
+    </script>
+</body>
+</html>

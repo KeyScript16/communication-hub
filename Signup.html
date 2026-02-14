@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css.css">
+    <title>Sign Up</title>
+</head>
+<body>
+    <div id="auth-container">
+        <h1>Create Account</h1>
+        <input type="text" id="signup-user" placeholder="Username">
+        <input type="email" id="signup-email" placeholder="Email">
+        <input type="password" id="signup-pass" placeholder="Password">
+        <button onclick="createAccount()">Sign Up</button>
+        <p><a href="index.html">Back to Hub</a></p>
+    </div>
+    <script>
+async function createAccount() {
+    const user = document.getElementById('signup-user').value;
+    const email = document.getElementById('signup-email').value;
+    const pass = document.getElementById('signup-pass').value;
+    
+    if(user && email && pass) {
+        try {
+            // 1. Get the current list of users first
+            const response = await fetch('http://localhost:3000/get-data');
+            let allUsers = await response.json();
+
+            // 2. Add the new user to the list
+            const newUser = { username: user, email: email, password: pass };
+            allUsers.push(newUser);
+
+            // 3. Save the updated list back to your db.json
+            await fetch('http://localhost:3000/save-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(allUsers)
+            });
+
+            // Inside createAccount after successful save...
+sessionStorage.setItem("currentUser", JSON.stringify({
+    email: email, 
+    username: user // <--- This is what makes the "Welcome [Name]" work!
+}));
+window.location.href = 'dashboard.html';
+
+        } catch (err) {
+            alert("Error connecting to server!");
+            console.error(err);
+        }
+    } else {
+        alert("Please fill in all fields.");
+    }
+}
+
+document.addEventListener("keypress", (e) => { if(e.key === "Enter") createAccount(); });
+const newUser = { 
+    username: user, 
+    email: email, 
+    password: pass, 
+    friends: [], 
+    requests: [] // <--- New: Holds incoming requests
+};
+
+
+
+    </script>
+</body>
+</html>

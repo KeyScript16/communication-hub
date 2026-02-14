@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Session</title>
+    <link rel="stylesheet" href="css.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div id="main-content" style="width: 500px; height: 80vh; display: flex; flex-direction: column;">
+        <h1 id="chat-header">Chat</h1>
+        <!-- TYPING ICON AREA -->
+        <div id="typing-indicator" style="height: 20px; font-size: 12px; color: #4ecca3; font-style: italic;"></div>
+        
+        <div id="message-history" style="flex-grow: 1; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 15px;"></div>
+        
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="chat-input" placeholder="Type a message..." style="margin: 0;">
+            <button onclick="sendMessage()" style="width: 80px; margin: 0;">Send</button>
+        </div>
+        <button onclick="goBack()" style="background: none; color: #4ecca3; margin-top: 10px;">Back to Dashboard</button>
+    </div>
+
+    <script>
+        const socket = io();
+        const user = JSON.parse(sessionStorage.getItem("currentUser"));
+        const params = new URLSearchParams(window.location.search);
+        const friendEmail = params.get('with');
+
+        if (!user || !friendEmail) { window.location.href = 'index.html'; }
+        document.getElementById('chat-header').innerText = "Chat with " + friendEmail;
+        socket.emit('go-online', user.email);
+
+        // --- TYPING LOGIC ---
+        const chatInput = document.getElementById('chat-input');
+        chatInput.addEventListener('input', () => {
+            socket.emit('typing', { to: friendEmail, fromName: user.username, isTyping: chatInput.value.length > 0 });
+        });
+
+        socket.on('friend-typing', (data) => {
+            document.getElementById('typing-indicator').innerText = data.isTyping ? data.fromName + " is typing..." : "";
+        });
+
+        // --- MESSAGING ---
+        socket.on('new-message', (data) => {
+            if (data.fromEmail === friendEmail) {
+                displayMessage(data.fromName, data.message);
+                playBell(); // Shortened ring
+            }
+        });
+
+        function sendMessage() {
+            const msg = chatInput.value;
+            if (msg && friendEmail) {
+                socket.emit('private-message', { to: friendEmail, message: msg, fromName: user.username, fromEmail: user.email });
+                displayMessage("Me", msg);
+                chatInput.value = "";
+                socket.emit('typing', { to: friendEmail, isTyping: false }); // Stop typing icon
+            }
+        }
+
+        function displayMessage(name, text) {
+            const history = document.getElementById('message-history');
+            history.innerHTML += `<div><strong style="color:#4ecca3">${name}:</strong> ${text}</div>`;
+            history.scrollTop = history.scrollHeight;
+        }
+
+        // --- BELL & DISCONNECT ---
+        function playBell() {
+    try {
+        const context = new (window.AudioContext || window.webkitAudioContext)();
+        const notes = [587.33, 659.25, 880.00]; // D5, E5, A5
+        
+        notes.forEach((freq, index) => {
+            const osc = context.createOscillator();
+            const gain = context.createGain();
+            const startTime = context.currentTime + (index * 0.15); // Stagger the notes
+            const stopTime = startTime + 0.2;
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, startTime);
+
+            gain.gain.setValueAtTime(0.1, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, stopTime);
+
+            osc.connect(gain);
+            gain.connect(context.destination);
+
+            osc.start(startTime);
+            osc.stop(stopTime);
+        });
+    } catch(e) { console.log("Audio blocked by browser"); }
+}
+
+
+        async function goBack() {
+            socket.emit('leave-chat', friendEmail);
+            setTimeout(() => { window.location.href = 'dashboard.html'; }, 100);
+        }
+
+        socket.on('chat-ended-by-friend', () => {
+            document.body.innerHTML = `<div id="main-content" style="text-align:center; padding-top:100px;"><h1>Chat Ended</h1><p>Your friend left.</p><button onclick="window.location.href='dashboard.html'">Back</button></div>`;
+        });
+
+        document.addEventListener("keypress", (e) => { if(e.key === "Enter") sendMessage(); });
+    </script>
+</body>
+</html>
