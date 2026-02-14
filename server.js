@@ -7,7 +7,6 @@ const cors = require('cors');
 const app = express();
 const server = http.createServer(app);
 
-// Strict CORS fix for Firefox/Chrome communication
 const io = new Server(server, { 
     cors: { 
         origin: "*",
@@ -18,6 +17,11 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
+
+// --- 1. NEW: THE HOME PAGE REDIRECT ---
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/index.html');
+});
 
 // --- DATABASE HELPERS ---
 function readDB() {
@@ -78,4 +82,6 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(3000, () => console.log("System LIVE at http://localhost:3000"));
+// --- 2. FIXED: DYNAMIC PORT FOR RENDER ---
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`System LIVE on port ${PORT}`));
