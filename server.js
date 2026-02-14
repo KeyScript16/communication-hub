@@ -3,12 +3,12 @@ const http = require('http');
 const { Server } = require('socket.io');
 const fs = require('fs');
 const cors = require('cors');
-const path = require('path'); // Added for Render file paths
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 
-// Strict CORS fix for cross-browser/cross-device communication
+// Allow all connections (important for cross-device chat)
 const io = new Server(server, { 
     cors: { 
         origin: "*",
@@ -18,9 +18,11 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname));
+// Serves your CSS and JS files from the main folder
+app.use(express.static(path.join(__dirname))); 
 
-// --- 1. THE RENDER HOME PAGE FIX ---
+// --- THE HOME PAGE FIX ---
+// This uses 'path.join' to find index.html no matter where Render puts it
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -28,16 +30,20 @@ app.get('/', (req, res) => {
 // --- DATABASE HELPERS ---
 function readDB() {
     try {
-        const data = fs.readFileSync('db.json', 'utf8');
+        const data = fs.readFileSync(path.join(__dirname, 'db.json'), 'utf8');
         return JSON.parse(data);
-    } catch (err) { return []; }
+    } catch (err) {
+        return []; // Return empty list if file doesn't exist yet
+    }
 }
+
 function writeDB(data) {
-    fs.writeFileSync('db.json', JSON.stringify(data, null, 2));
+    fs.writeFileSync(path.join(__dirname, 'db.json'), JSON.stringify(data, null, 2));
 }
 
 // --- API ROUTES ---
 app.get('/get-data', (req, res) => res.send(readDB()));
+
 app.post('/save-data', (req, res) => {
     writeDB(req.body);
     res.send({ status: "Saved!" });
@@ -50,7 +56,7 @@ io.on('connection', (socket) => {
     socket.on('go-online', (email) => {
         onlineUsers[email] = socket.id;
         io.emit('update-online-list', Object.keys(onlineUsers));
-        console.log(`${email} is live.`);
+        console.log(`${email} is online.`);
     });
 
     socket.on('request-chat', (data) => {
@@ -86,7 +92,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- 2. THE DYNAMIC PORT FIX ---
-// This lets Render choose the port (usually 10000) instead of forcing 3000
+// --- DYNAMIC PORT FIX ---
+// This is required for Render to find your server!
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Crescendo-Chat LIVE on port ${PORT}`));
