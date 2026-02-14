@@ -23,47 +23,43 @@ async function createAccount() {
     
     if(user && email && pass) {
         try {
-            // 1. Get the current list of users first
-            const response = await fetch('http://localhost:3000/get-data');
+            // 1. Get current list from your LIVE Render server
+            const response = await fetch('https://crescendo-chat.onrender.com');
             let allUsers = await response.json();
 
-            // 2. Add the new user to the list
-            const newUser = { username: user, email: email, password: pass };
+            // 2. Add the new user with a blank friends and requests list
+            const newUser = { 
+                username: user, 
+                email: email, 
+                password: pass, 
+                friends: [], 
+                requests: [] 
+            };
             allUsers.push(newUser);
 
-            // 3. Save the updated list back to your db.json
-            await fetch('http://localhost:3000/save-data', {
+            // 3. Save to the LIVE Render database
+            await fetch('https://crescendo-chat.onrender.com', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(allUsers)
             });
 
-            // Inside createAccount after successful save...
-sessionStorage.setItem("currentUser", JSON.stringify({
-    email: email, 
-    username: user // <--- This is what makes the "Welcome [Name]" work!
-}));
-window.location.href = 'dashboard.html';
+            sessionStorage.setItem("currentUser", JSON.stringify({
+                email: email, 
+                username: user
+            }));
+            
+            window.location.href = 'dashboard.html';
 
         } catch (err) {
-            alert("Error connecting to server!");
+            alert("Error connecting to Crescendo-Chat server!");
             console.error(err);
         }
     } else {
         alert("Please fill in all fields.");
     }
 }
-
 document.addEventListener("keypress", (e) => { if(e.key === "Enter") createAccount(); });
-const newUser = { 
-    username: user, 
-    email: email, 
-    password: pass, 
-    friends: [], 
-    requests: [] // <--- New: Holds incoming requests
-};
-
-
 
     </script>
 </body>

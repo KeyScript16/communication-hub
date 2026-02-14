@@ -38,20 +38,19 @@ if (!userData) window.location.href = 'index.html';
 const user = JSON.parse(userData);
 document.getElementById('display-name').innerText = user.username;
 
-// Explicitly point to localhost for cross-browser stability
-const socket = io('http://localhost:3000'); 
+// UPGRADED: Points to your live Render server!
+const socket = io('https://crescendo-chat.onrender.com'); 
 socket.emit('go-online', user.email);
 
 socket.on('update-online-list', async (onlineEmails) => {
     const listDiv = document.getElementById('friends-list');
     listDiv.innerHTML = ""; 
 
-    const response = await fetch('http://localhost:3000/get-data');
+    const response = await fetch('https://crescendo-chat.onrender.com');
     const allUsers = await response.json();
     const me = allUsers.find(u => u.email === user.email);
 
     if (me) {
-        // --- REQUESTS ---
         if (me.requests && me.requests.length > 0) {
             let html = "<div style='background:rgba(78,204,163,0.1); padding:10px; border-radius:10px; margin-bottom:20px;'><h3>Requests:</h3>";
             me.requests.forEach(s => {
@@ -59,7 +58,6 @@ socket.on('update-online-list', async (onlineEmails) => {
             });
             listDiv.innerHTML += html + "</div>";
         }
-        // --- FRIENDS ---
         listDiv.innerHTML += "<h3>Friends:</h3>";
         (me.friends || []).forEach(f => {
             const online = onlineEmails.includes(f);
@@ -74,29 +72,29 @@ socket.on('update-online-list', async (onlineEmails) => {
 async function addFriend() {
     const target = prompt("Friend's email:");
     if (!target || target === user.email) return;
-    const res = await fetch('http://localhost:3000/get-data');
+    const res = await fetch('https://crescendo-chat.onrender.com');
     let users = await res.json();
     let friend = users.find(u => u.email === target);
     if (friend) {
         friend.requests = friend.requests || [];
         if (!friend.requests.includes(user.email)) {
             friend.requests.push(user.email);
-            await fetch('http://localhost:3000/save-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
+            await fetch('https://crescendo-chat.onrender.com', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
             alert("Sent!");
-            socket.emit('go-online', user.email); // Force refresh across browsers
+            socket.emit('go-online', user.email);
         }
     } else alert("Not found");
 }
 
 async function acceptFriend(sender) {
-    const res = await fetch('http://localhost:3000/get-data');
+    const res = await fetch('https://crescendo-chat.onrender.com');
     let users = await res.json();
     let me = users.find(u => u.email === user.email);
     let them = users.find(u => u.email === sender);
     me.friends = me.friends || []; them.friends = them.friends || [];
     me.friends.push(sender); them.friends.push(user.email);
     me.requests = me.requests.filter(r => r !== sender);
-    await fetch('http://localhost:3000/save-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
+    await fetch('https://crescendo-chat.onrender.com', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
     location.reload();
 }
 
@@ -123,11 +121,16 @@ socket.on('start-chat-confirmed', (d) => {
 function playBell() {
     try {
         const c = new (window.AudioContext || window.webkitAudioContext)();
-        const o = c.createOscillator(); const g = c.createGain();
-        o.type = 'sine'; o.frequency.setValueAtTime(880, c.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.2);
-        o.connect(g); g.connect(c.destination);
-        o.start(); o.stop(c.currentTime + 0.2);
+        const notes = [587.33, 659.25, 880.00]; 
+        notes.forEach((freq, index) => {
+            const o = c.createOscillator(); const g = c.createGain();
+            const start = c.currentTime + (index * 0.15);
+            o.type = 'sine'; o.frequency.setValueAtTime(freq, start);
+            g.gain.setValueAtTime(0.1, start);
+            g.gain.exponentialRampToValueAtTime(0.0001, start + 0.2);
+            o.connect(g); g.connect(c.destination);
+            o.start(start); o.stop(start + 0.2);
+        });
     } catch(e) {}
 }
 
