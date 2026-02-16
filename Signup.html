@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css.css">
+    <title>Sign Up</title>
+</head>
+<body>
+    <div id="auth-container">
+        <h1>Create Account</h1>
+        <input type="text" id="signup-user" placeholder="Username">
+        <input type="email" id="signup-email" placeholder="Email">
+        <input type="password" id="signup-pass" placeholder="Password">
+        <button onclick="createAccount()">Sign Up</button>
+        <p><a href="index.html">Back to Hub</a></p>
+    </div>
+    <script>
+async function createAccount() {
+    const user = document.getElementById('signup-user').value;
+    const email = document.getElementById('signup-email').value;
+    const pass = document.getElementById('signup-pass').value;
+    
+    if(user && email && pass) {
+        try {
+            // 1. Point to your GET route /get-data
+            const response = await fetch('/get-data'); 
+            let allUsers = await response.json();
+
+            const newUser = { 
+                username: user, 
+                email: email, 
+                password: pass, 
+                friends: [], 
+                requests: [] 
+            };
+            allUsers.push(newUser);
+
+            // 2. Point to your POST route /save-data
+            await fetch('/save-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(allUsers)
+            });
+
+            sessionStorage.setItem("currentUser", JSON.stringify({
+                email: email, 
+                username: user
+            }));
+            
+            window.location.href = 'dashboard.html';
+
+        } catch (err) {
+            alert("Error connecting to Crescendo-Chat server!");
+            console.error(err);
+        }
+    } else {
+        alert("Please fill in all fields.");
+    }
+}
+
+    </script>
+</body>
+</html>
