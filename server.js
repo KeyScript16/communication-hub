@@ -1,14 +1,25 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const fs = require('fs');
 const cors = require('cors');
 const path = require('path');
+const { Pool } = require('pg'); // Required for the database
 
 const app = express();
 const server = http.createServer(app);
 
-// Allow all connections (important for cross-device chat)
+// --- DATABASE CONNECTION ---
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false } // Required for Render
+});
+
+// Create the table automatically if it doesn't exist
+const initDB = async () => {
+    await pool.query('CREATE TABLE IF NOT EXISTS site_data (id SERIAL PRIMARY KEY, content JSONB)');
+};
+initDB();
+
 const io = new Server(server, { 
     cors: { 
         origin: "*",
@@ -18,34 +29,40 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
-// Serves your CSS and JS files from the main folder
 app.use(express.static(path.join(__dirname))); 
 
-// --- THE HOME PAGE FIX ---
-// This uses 'path.join' to find index.html no matter where Render puts it
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- DATABASE HELPERS ---
-function readDB() {
+// --- UPDATED DATABASE HELPERS (ASYNC) ---
+async function readDB() {
     try {
-        const data = fs.readFileSync(path.join(__dirname, 'db.json'), 'utf8');
-        return JSON.parse(data);
+        const res = await pool.query('SELECT content FROM site_data LIMIT 1');
+        return res.rows.length ? res.rows[0].content : [];
     } catch (err) {
-        return []; // Return empty list if file doesn't exist yet
+        console.error("Read Error:", err);
+        return [];
     }
 }
 
-function writeDB(data) {
-    fs.writeFileSync(path.join(__dirname, 'db.json'), JSON.stringify(data, null, 2));
+async function writeDB(data) {
+    try {
+        await pool.query('DELETE FROM site_data'); // Clear old
+        await pool.query('INSERT INTO site_data (content) VALUES ($1)', [JSON.stringify(data)]);
+    } catch (err) {
+        console.error("Write Error:", err);
+    }
 }
 
-// --- API ROUTES ---
-app.get('/get-data', (req, res) => res.send(readDB()));
+// --- API ROUTES (NOW ASYNC) ---
+app.get('/get-data', async (req, res) => {
+    const data = await readDB();
+    res.send(data);
+});
 
-app.post('/save-data', (req, res) => {
-    writeDB(req.body);
+app.post('/save-data', async (req, res) => {
+    await writeDB(req.body);
     res.send({ status: "Saved!" });
 });
 
@@ -56,7 +73,6 @@ io.on('connection', (socket) => {
     socket.on('go-online', (email) => {
         onlineUsers[email] = socket.id;
         io.emit('update-online-list', Object.keys(onlineUsers));
-        console.log(`${email} is online.`);
     });
 
     socket.on('request-chat', (data) => {
@@ -92,7 +108,8 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- DYNAMIC PORT FIX ---
-// This is required for Render to find your server!
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Crescendo-Chat LIVE on port ${PORT}`));
+// --- DYNAMIC PORT & HOST FIX ---
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Crescendo-Chat LIVE on port ${PORT}`);
+});
