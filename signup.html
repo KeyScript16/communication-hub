@@ -12,9 +12,10 @@
         <input type="text" id="signup-user" placeholder="Username">
         <input type="email" id="signup-email" placeholder="Email">
         <input type="password" id="signup-pass" placeholder="Password">
-        <button onclick="createAccount()">Sign Up</button>
+        <button type="button" onclick="createAccount()">Sign Up</button>
         <p><a href="index.html">Back to Hub</a></p>
     </div>
+
     <script>
 async function createAccount() {
     const user = document.getElementById('signup-user').value;
@@ -23,11 +24,20 @@ async function createAccount() {
     
     if(user && email && pass) {
         try {
-            // 1. Get current list from your LIVE Render server
-            const response = await fetch('https://crescendo-chat.onrender.com');
+            // 1. Get the data from the correct JSON route
+            const response = await fetch('https://crescendo-chat.onrender.com'); 
+            
+            if (!response.ok) {
+                throw new Error("Server returned an HTML page instead of JSON. Check your routes!");
+            }
+
             let allUsers = await response.json();
 
-            // 2. Add the new user with a blank friends and requests list
+            // Safety check: if database is empty, start a new list
+            if (!Array.isArray(allUsers)) {
+                allUsers = [];
+            }
+
             const newUser = { 
                 username: user, 
                 email: email, 
@@ -37,30 +47,40 @@ async function createAccount() {
             };
             allUsers.push(newUser);
 
-            // 3. Save to the LIVE Render database
-            await fetch('https://crescendo-chat.onrender.com', {
+            // 2. Save the data to the correct POST route
+            const saveResponse = await fetch('https://crescendo-chat.onrender.com', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(allUsers)
             });
 
-            sessionStorage.setItem("currentUser", JSON.stringify({
-                email: email, 
-                username: user
-            }));
-            
-            window.location.href = 'dashboard.html';
+            if (saveResponse.ok) {
+                sessionStorage.setItem("currentUser", JSON.stringify({
+                    email: email, 
+                    username: user
+                }));
+                
+                // Ensure this file is also lowercase on GitHub!
+                window.location.href = 'dashboard.html';
+            } else {
+                alert("Failed to save account to database.");
+            }
 
         } catch (err) {
             alert("Error connecting to Crescendo-Chat server!");
-            console.error(err);
+            console.error("Signup Detail Error:", err);
         }
     } else {
         alert("Please fill in all fields.");
     }
 }
-document.addEventListener("keypress", (e) => { if(e.key === "Enter") createAccount(); });
 
+// Allow Enter key to submit
+document.addEventListener("keypress", (e) => { 
+    if(e.key === "Enter") createAccount(); 
+});
     </script>
 </body>
 </html>
+
+
