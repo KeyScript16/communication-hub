@@ -8,31 +8,32 @@ const { Pool } = require('pg');
 const app = express();
 const server = http.createServer(app);
 
-// --- DATABASE CONNECTION ---
+// 1. --- DATABASE CONNECTION ---
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
 });
 
-// Create table if it doesn't exist
+// Initialize Table
 const initDB = async () => {
     try {
         await pool.query('CREATE TABLE IF NOT EXISTS site_data (id SERIAL PRIMARY KEY, content JSONB)');
+        console.log("Database Table Ready");
     } catch (err) {
         console.error("DB Init Error:", err);
     }
 };
 initDB();
 
-// --- MIDDLEWARE ---
+// 2. --- MIDDLEWARE ---
 app.use(cors());
 app.use(express.json());
 
-// --- DATABASE HELPERS ---
+// 3. --- DATABASE HELPERS ---
 async function readDB() {
     try {
         const res = await pool.query('SELECT content FROM site_data LIMIT 1');
-        // Fixed: Ensure we check if rows exist before accessing index 0
+        // Returns the JSON content if it exists, otherwise an empty array
         return (res.rows.length > 0) ? res.rows[0].content : [];
     } catch (err) {
         console.error("Read Error:", err);
@@ -49,10 +50,10 @@ async function writeDB(data) {
     }
 }
 
-// --- API ROUTES (MUST BE ABOVE STATIC FILES) ---
+// 4. --- API ROUTES (MUST BE ABOVE STATIC FILES) ---
 app.get('/get-data', async (req, res) => {
     const data = await readDB();
-    res.json(data); // Use .json to ensure correct headers
+    res.json(data); 
 });
 
 app.post('/save-data', async (req, res) => {
@@ -60,16 +61,17 @@ app.post('/save-data', async (req, res) => {
     res.json({ status: "Saved!" });
 });
 
-// --- STATIC FILES (MUST BE BELOW API ROUTES) ---
+// 5. --- STATIC FILES (MUST BE AT THE BOTTOM) ---
+// This serves your HTML, CSS, and JS files
 app.use(express.static(path.join(__dirname))); 
 
+// Default route to serve index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- LIVE CHAT & HANDSHAKE LOGIC ---
+// 6. --- LIVE CHAT (SOCKET.IO) ---
 let onlineUsers = {}; 
-
 const io = new Server(server, { 
     cors: { origin: "*", methods: ["GET", "POST"] } 
 });
@@ -113,10 +115,8 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- PORT & HOST ---
+// 7. --- SERVER START ---
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Crescendo-Chat LIVE on port ${PORT}`);
 });
-
-
