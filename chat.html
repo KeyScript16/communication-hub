@@ -37,7 +37,9 @@
         document.getElementById('chat-header').innerText = "Chat with " + friendEmail;
         
         // Signal online status
-        socket.emit('go-online', user.email);
+        // Near the top of chat.html script
+socket.emit('go-online', { email: user.email, username: user.username });
+
 
         const chatInput = document.getElementById('chat-input');
         
@@ -165,6 +167,7 @@
     </script>
 </body>
 </html>
+
 
 
 
