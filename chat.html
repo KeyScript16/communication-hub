@@ -179,6 +179,16 @@ socket.emit('go-online', { email: user.email, username: user.username });
         isTyping: true 
     });
 }
+        async function updateHeader() {
+    const response = await fetch(`${BASE_URL}/get-data`);
+    const allUsers = await response.json();
+    const friend = allUsers.find(u => u.email === friendEmail);
+    if (friend) {
+        document.getElementById('chat-header').innerText = "Chat with " + friend.username;
+    }
+}
+updateHeader(); // Run this when the page loads
+
 
 
         document.addEventListener("keypress", (e) => { 
@@ -188,6 +198,7 @@ socket.emit('go-online', { email: user.email, username: user.username });
     </script>
 </body>
 </html>
+
 
 
 
