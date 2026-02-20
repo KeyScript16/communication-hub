@@ -22,14 +22,17 @@ const initDB = async () => {
 };
 initDB();
 
-// 2. MIDDLEWARE - Allows your GitHub site to communicate with this server
+// 2. MIDDLEWARE
 app.use(cors()); 
 app.use(express.json());
+
+// STATIC FILES MUST BE ABOVE ROUTES to fix MIME errors
+app.use(express.static(path.join(__dirname))); 
 
 async function readDB() {
     try {
         const res = await pool.query('SELECT content FROM site_data LIMIT 1');
-        // If there's a row AND it has content, return it. Otherwise, return []
+        // Correctly access the JSONB content from the first row
         if (res.rows && res.rows[0] && res.rows[0].content) {
             return res.rows[0].content; 
         }
@@ -40,27 +43,23 @@ async function readDB() {
     }
 }
 
-
-
 async function writeDB(data) {
     try {
         await pool.query('DELETE FROM site_data'); 
         await pool.query('INSERT INTO site_data (content) VALUES ($1)', [JSON.stringify(data)]);
     } catch (err) { console.error("Write Error:", err); }
 }
-// A. Tell the server where your files (CSS, JS, Images) are
-app.use(express.static(__dirname));
 
-// B. Route for the Home/Login page
+// 3. PAGE ROUTES
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// C. Route for the Dashboard
 app.get('/dashboard.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
-// 3. API ROUTES
+
+// 4. API ROUTES
 app.get('/get-data', async (req, res) => {
     const data = await readDB();
     res.json(data); 
@@ -71,31 +70,14 @@ app.post('/save-data', async (req, res) => {
     res.json({ status: "Saved!" });
 });
 
-// 4. SOCKET.IO LOGIC
-const io = new Server(server, { 
-    cors: { origin: "*" } 
-});
-
-let onlineUsers = {}; // Tracks { email: socketId }
+// 5. SOCKET.IO LOGIC
+const io = new Server(server, { cors: { origin: "*" } });
+let onlineUsers = {}; 
 
 io.on('connection', (socket) => {
     socket.on('go-online', (email) => {
         onlineUsers[email] = socket.id;
         io.emit('update-online-list', Object.keys(onlineUsers));
-    });
-
-    socket.on('request-chat', (data) => {
-        const targetId = onlineUsers[data.to];
-        if (targetId) {
-            io.to(targetId).emit('chat-requested', data);
-        }
-    });
-
-    socket.on('chat-response', (data) => {
-        const targetId = onlineUsers[data.to];
-        if (targetId) {
-            io.to(targetId).emit('start-chat-confirmed', data);
-        }
     });
 
     socket.on('disconnect', () => {
@@ -109,9 +91,5 @@ io.on('connection', (socket) => {
     });
 });
 
-// 5. START SERVER (Fixed Port Binding)
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-
-
