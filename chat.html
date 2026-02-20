@@ -126,10 +126,11 @@
         document.addEventListener('click', unlockAudio, { once: true });
 
         // --- SESSION LOGIC ---
-        async function goBack() {
-            socket.emit('leave-chat', friendEmail);
-            setTimeout(() => { window.location.href = 'dashboard.html'; }, 100);
-        }
+        function goBack() {
+    socket.emit('leave-chat', friendEmail);
+    window.location.href = 'dashboard.html'; 
+}
+
 
         socket.on('chat-ended-by-friend', () => {
             document.body.innerHTML = `
@@ -147,4 +148,5 @@
     </script>
 </body>
 </html>
+
 
