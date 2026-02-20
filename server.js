@@ -69,15 +69,31 @@ app.post('/save-data', async (req, res) => {
     await writeDB(req.body);
     res.json({ status: "Saved!" });
 });
-
 // 5. SOCKET.IO LOGIC
 const io = new Server(server, { cors: { origin: "*" } });
 let onlineUsers = {}; 
 
 io.on('connection', (socket) => {
+    
     socket.on('go-online', (email) => {
         onlineUsers[email] = socket.id;
         io.emit('update-online-list', Object.keys(onlineUsers));
+    });
+
+    // 1. Listen for the initial chat request
+    socket.on('request-chat', (data) => {
+        const targetSocketId = onlineUsers[data.to];
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('chat-requested', data);
+        }
+    });
+
+    // 2. Listen for the friend's response (Accept/Decline)
+    socket.on('chat-response', (data) => {
+        const requesterSocketId = onlineUsers[data.to];
+        if (requesterSocketId) {
+            io.to(requesterSocketId).emit('start-chat-confirmed', data);
+        }
     });
 
     socket.on('disconnect', () => {
@@ -91,5 +107,8 @@ io.on('connection', (socket) => {
     });
 });
 
+
+
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
