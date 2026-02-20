@@ -73,12 +73,17 @@ app.post('/save-data', async (req, res) => {
 const io = new Server(server, { cors: { origin: "*" } });
 let onlineUsers = {}; 
 
-io.on('connection', (socket) => {
-    
-    socket.on('go-online', (email) => {
-        onlineUsers[email] = socket.id;
-        io.emit('update-online-list', Object.keys(onlineUsers));
-    });
+let onlineUsers = {}; 
+
+socket.on('go-online', (userData) => {
+    // Save both ID and name
+    onlineUsers[userData.email] = { 
+        id: socket.id, 
+        username: userData.username 
+    };
+    io.emit('update-online-list', Object.keys(onlineUsers));
+});
+
 
     // --- ADD THESE NEW LISTENERS BELOW ---
 
@@ -139,5 +144,6 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
