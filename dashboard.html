@@ -44,7 +44,7 @@
 
             const response = await fetch(`${BASE_URL}/get-data`);
             const allUsers = await response.json();
-            const me = allUsers.find(u => u.email === user.email);
+            const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
 
             if (me) {
                 // Show incoming requests
@@ -130,3 +130,4 @@
     </script>
 </body>
 </html>
+
