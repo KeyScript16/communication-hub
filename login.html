@@ -16,22 +16,26 @@
 
 <script>
 async function login() {
-    const email = document.getElementById('login-email').value;
-    const pass = document.getElementById('login-pass').value;
+    const emailInput = document.getElementById('login-email').value.trim();
+    const passInput = document.getElementById('login-pass').value;
     
     // Admin check
-    if (email === "Fordbenjamin2016@gmail.com" && pass === "Admin") {
-        sessionStorage.setItem("currentUser", JSON.stringify({email: email, username: "Ben"}));
+    if (emailInput === "Fordbenjamin2016@gmail.com" && passInput === "Admin") {
+        sessionStorage.setItem("currentUser", JSON.stringify({email: emailInput, username: "Ben"}));
         window.location.href = 'dashboard.html';
         return;
     }
 
     try {
-        // Talking to your LIVE Render server
+        // FIX: Points to /get-data specifically
         const response = await fetch('https://crescendo-chat.onrender.com');
         const allUsers = await response.json();
 
-        const userFound = allUsers.find(u => u.email === email && u.password === pass);
+        // FIX: Converts both to lowercase so it's not case-sensitive
+        const userFound = allUsers.find(u => 
+            u.email.toLowerCase() === emailInput.toLowerCase() && 
+            u.password === passInput
+        );
 
         if (userFound) {
             sessionStorage.setItem("currentUser", JSON.stringify({
@@ -43,6 +47,7 @@ async function login() {
             alert("Account not found or wrong password.");
         }
     } catch (err) {
+        console.error(err);
         alert("Crescendo-Chat server is waking up. Try again in 30 seconds!");
     }
 }
@@ -51,3 +56,4 @@ document.addEventListener("keypress", (e) => { if(e.key === "Enter") login(); })
     </script>
 </body>
 </html>
+
