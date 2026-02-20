@@ -90,3 +90,50 @@ a {
     font-size: 12px;
     text-transform: uppercase;
 }
+/* Container for the whole message line */
+.message-wrapper {
+    display: flex;
+    margin-bottom: 12px;
+    width: 100%;
+}
+
+.message-wrapper.me {
+    justify-content: flex-end; /* Push my messages to the right */
+}
+
+.message-wrapper.them {
+    justify-content: flex-start; /* Push friend messages to the left */
+}
+
+/* The actual bubble */
+.bubble {
+    max-width: 80%;
+    padding: 10px 15px;
+    border-radius: 15px;
+    font-size: 14px;
+    position: relative;
+    line-height: 1.4;
+}
+
+.me .bubble {
+    background: #4ecca3;
+    color: #1a1a2e;
+    border-bottom-right-radius: 2px; /* Chat tail effect */
+}
+
+.them .bubble {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border-bottom-left-radius: 2px; /* Chat tail effect */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Small timestamp text */
+.timestamp {
+    display: block;
+    font-size: 10px;
+    margin-top: 5px;
+    opacity: 0.6;
+}
+
+
