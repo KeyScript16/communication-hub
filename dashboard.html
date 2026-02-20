@@ -26,16 +26,20 @@
         // Define socket globally so all functions can use it
         const socket = io(BASE_URL);
 
-        async function init() {
-            document.getElementById('display-name').innerText = user.username;
-            try {
-                await fetch(`${BASE_URL}/get-data`);
-                console.log("Server Awake");
-                socket.emit('go-online', user.email); 
-            } catch(e) { 
-                console.log("Waking up..."); 
-            }
-        }
+       async function init() {
+    document.getElementById('display-name').innerText = user.username;
+    try {
+        await fetch(`${BASE_URL}/get-data`);
+        console.log("Server Awake");
+        
+        // UPDATED LINE: Send an object instead of just an email string
+        socket.emit('go-online', { email: user.email, username: user.username }); 
+        
+    } catch(e) { 
+        console.log("Waking up..."); 
+    }
+}
+
 
         socket.on('update-online-list', async (onlineEmails) => {
             const listDiv = document.getElementById('friends-list');
@@ -141,5 +145,6 @@ socket.on('start-chat-confirmed', (data) => {
     </script>
 </body>
 </html>
+
 
 
