@@ -8,6 +8,7 @@ const { Pool } = require('pg');
 const app = express();
 const server = http.createServer(app);
 
+// 1. DATABASE SETUP
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
@@ -21,7 +22,8 @@ const initDB = async () => {
 };
 initDB();
 
-app.use(cors());
+// 2. MIDDLEWARE - Allows your GitHub site to communicate with this server
+app.use(cors()); 
 app.use(express.json());
 
 async function readDB() {
@@ -38,7 +40,7 @@ async function writeDB(data) {
     } catch (err) { console.error("Write Error:", err); }
 }
 
-// --- API ROUTES FIRST ---
+// 3. API ROUTES
 app.get('/get-data', async (req, res) => {
     const data = await readDB();
     res.json(data); 
@@ -49,17 +51,44 @@ app.post('/save-data', async (req, res) => {
     res.json({ status: "Saved!" });
 });
 
-// --- STATIC FILES BOTTOM ---
-app.use(express.static(path.join(__dirname))); 
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+// 4. SOCKET.IO LOGIC
+const io = new Server(server, { 
+    cors: { origin: "*" } 
 });
 
-const io = new Server(server, { cors: { origin: "*" } });
-// ... (Your existing Socket.io logic here) ...
+let onlineUsers = {}; // Tracks { email: socketId }
 
+io.on('connection', (socket) => {
+    socket.on('go-online', (email) => {
+        onlineUsers[email] = socket.id;
+        io.emit('update-online-list', Object.keys(onlineUsers));
+    });
+
+    socket.on('request-chat', (data) => {
+        const targetId = onlineUsers[data.to];
+        if (targetId) {
+            io.to(targetId).emit('chat-requested', data);
+        }
+    });
+
+    socket.on('chat-response', (data) => {
+        const targetId = onlineUsers[data.to];
+        if (targetId) {
+            io.to(targetId).emit('start-chat-confirmed', data);
+        }
+    });
+
+    socket.on('disconnect', () => {
+        for (let email in onlineUsers) {
+            if (onlineUsers[email] === socket.id) {
+                delete onlineUsers[email];
+                break;
+            }
+        }
+        io.emit('update-online-list', Object.keys(onlineUsers));
+    });
+});
+
+// 5. START SERVER (Fixed Port Binding)
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, '0.0.0.0', () => console.log(`LIVE on port ${PORT}`));
-
-
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
