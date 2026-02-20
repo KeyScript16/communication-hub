@@ -75,12 +75,11 @@ let onlineUsers = {};
 
 let onlineUsers = {}; 
 
-socket.on('go-online', (userData) => {
-    // Save both ID and name
-    onlineUsers[userData.email] = { 
-        id: socket.id, 
-        username: userData.username 
-    };
+socket.on('go-online', (data) => {
+    // data is now { email: "...", username: "..." }
+    onlineUsers[data.email] = socket.id; 
+    
+    // Broadcast just the emails for the "Online" dots list
     io.emit('update-online-list', Object.keys(onlineUsers));
 });
 
@@ -144,6 +143,7 @@ socket.on('go-online', (userData) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
 
