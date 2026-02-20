@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
-    <script src="https://cdn.socket.io"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <title>Dashboard</title>
 </head>
 <body>
@@ -33,9 +33,6 @@
         // ADD THIS LINE to refresh the list immediately on load:
         socket.emit('go-online', user.email); 
     } catch(e) { console.log("Waking up..."); }
-}
-
-        init();
 
         const socket = io(BASE_URL); 
         socket.emit('go-online', user.email);
@@ -133,6 +130,7 @@
     </script>
 </body>
 </html>
+
 
 
 
