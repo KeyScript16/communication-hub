@@ -29,16 +29,17 @@ app.use(express.json());
 async function readDB() {
     try {
         const res = await pool.query('SELECT content FROM site_data LIMIT 1');
-        // FIX: Added [0] to get the first row from the database result
-        if (res.rows.length > 0) {
+        // If there's a row AND it has content, return it. Otherwise, return []
+        if (res.rows && res.rows[0] && res.rows[0].content) {
             return res.rows[0].content; 
         }
-        return []; // Return empty array if no data exists yet
+        return []; 
     } catch (err) { 
         console.error("Database Read Error:", err);
         return []; 
     }
 }
+
 
 
 async function writeDB(data) {
@@ -100,4 +101,5 @@ io.on('connection', (socket) => {
 // 5. START SERVER (Fixed Port Binding)
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
