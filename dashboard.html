@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
     <!-- FIX 1: Use CDN for Socket.io -->
-    <script src="https://cdn.socket.io"></script>
+<script src="https://cdn.socket.io"></script>
     <title>Dashboard</title>
 </head>
 <body>
@@ -27,12 +27,15 @@
         
         // Wake up logic
         async function init() {
-            document.getElementById('display-name').innerText = user.username;
-            try {
-                await fetch(`${BASE_URL}/get-data`);
-                console.log("Server Awake");
-            } catch(e) { console.log("Waking up..."); }
-        }
+    document.getElementById('display-name').innerText = user.username;
+    try {
+        await fetch(`${BASE_URL}/get-data`);
+        console.log("Server Awake");
+        // ADD THIS LINE to refresh the list immediately on load:
+        socket.emit('go-online', user.email); 
+    } catch(e) { console.log("Waking up..."); }
+}
+
         init();
 
         const socket = io(BASE_URL); 
@@ -93,7 +96,7 @@
             const res = await fetch(`${BASE_URL}/get-data`);
             let users = await res.json();
             let me = users.find(u => u.email === user.email);
-            let them = users.find(u => u.email === sender);
+            let them = users.find(u => u.email.toLowerCase() === sender.toLowerCase());
 
             if(me && them) {
                 me.friends = me.friends || []; 
@@ -130,4 +133,5 @@
     </script>
 </body>
 </html>
+
 
