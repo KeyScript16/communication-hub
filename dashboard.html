@@ -4,16 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <title>Dashboard</title>
 </head>
 <body>
     <div id="main-content" style="width: 450px;">
         <h1>Dashboard</h1>
         <p>Welcome, <span id="display-name">Loading...</span></p>
-        
         <div id="friends-list" style="margin-top: 20px; text-align: left;"></div>
-
         <button onclick="addFriend()" style="margin-top: 20px; background: #4ecca3; color: #1a1a2e;">Add New Friend</button>
         <button onclick="logout()" style="margin-top: 10px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">Logout</button>
     </div>
@@ -23,19 +21,20 @@
         const userData = sessionStorage.getItem("currentUser");
         if (!userData) window.location.href = 'index.html';
         const user = JSON.parse(userData);
-        
-        // Wake up logic
-        async function init() {
-    document.getElementById('display-name').innerText = user.username;
-    try {
-        await fetch(`${BASE_URL}/get-data`);
-        console.log("Server Awake");
-        // ADD THIS LINE to refresh the list immediately on load:
-        socket.emit('go-online', user.email); 
-    } catch(e) { console.log("Waking up..."); }
 
-        const socket = io(BASE_URL); 
-        socket.emit('go-online', user.email);
+        // Define socket globally so all functions can use it
+        const socket = io(BASE_URL);
+
+        async function init() {
+            document.getElementById('display-name').innerText = user.username;
+            try {
+                await fetch(`${BASE_URL}/get-data`);
+                console.log("Server Awake");
+                socket.emit('go-online', user.email); 
+            } catch(e) { 
+                console.log("Waking up..."); 
+            }
+        }
 
         socket.on('update-online-list', async (onlineEmails) => {
             const listDiv = document.getElementById('friends-list');
@@ -46,7 +45,6 @@
             const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
 
             if (me) {
-                // Show incoming requests
                 if (me.requests && me.requests.length > 0) {
                     let reqHtml = "<div style='background:rgba(78,204,163,0.1); padding:10px; border-radius:10px; margin-bottom:20px;'><h4>New Requests:</h4>";
                     me.requests.forEach(s => {
@@ -55,7 +53,6 @@
                     listDiv.innerHTML = reqHtml + "</div>" + listDiv.innerHTML;
                 }
 
-                // Show friends
                 (me.friends || []).forEach(f => {
                     const online = onlineEmails.includes(f);
                     const row = document.createElement('div');
@@ -72,7 +69,7 @@
 
             const res = await fetch(`${BASE_URL}/get-data`);
             let users = await res.json();
-            let friend = users.find(u => u.email === target);
+            let friend = users.find(u => u.email.toLowerCase() === target.toLowerCase());
 
             if (friend) {
                 friend.requests = friend.requests || [];
@@ -91,7 +88,7 @@
         async function acceptFriend(sender) {
             const res = await fetch(`${BASE_URL}/get-data`);
             let users = await res.json();
-            let me = users.find(u => u.email === user.email);
+            let me = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
             let them = users.find(u => u.email.toLowerCase() === sender.toLowerCase());
 
             if(me && them) {
@@ -125,18 +122,12 @@
             if(d.accepted) window.location.href = `chat.html?with=${d.fromEmail}`;
         });
 
-                function logout() { 
+        function logout() { 
             sessionStorage.clear(); 
             window.location.href = 'index.html'; 
         }
 
-        // Final call to start the app
         init();
     </script>
 </body>
 </html>
-
-
-
-
-
