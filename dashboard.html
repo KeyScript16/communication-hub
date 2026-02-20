@@ -127,9 +127,19 @@
             sessionStorage.clear(); 
             window.location.href = 'index.html'; 
         }
+        // This listener handles the "Success" signal after the friend clicks 'Accept'
+socket.on('start-chat-confirmed', (data) => {
+    console.log("Chat accepted by:", data.fromEmail);
+    if (data.accepted) {
+        // This moves the person who SENT the request to the chat page
+        window.location.href = `chat.html?with=${data.fromEmail}`;
+    }
+});
+
 
         init();
     </script>
 </body>
 </html>
+
 
