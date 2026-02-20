@@ -24,12 +24,6 @@
     <span onclick="addEmoji('👍')" style="cursor:pointer; font-size: 20px; transition: 0.2s;" class="emoji-btn">👍</span>
     <span onclick="addEmoji('🚀')" style="cursor:pointer; font-size: 20px; transition: 0.2s;" class="emoji-btn">🚀</span>
 </div>
-
-<div style="display: flex; gap: 10px;">
-    <input type="text" id="chat-input" placeholder="Type a message..." style="margin: 0;">
-    <button id="send-btn" onclick="sendMessage()" style="width: 80px; margin: 0;">Send</button>
-</div>
-
         <div style="display: flex; gap: 10px;">
             <input type="text" id="chat-input" placeholder="Type a message..." style="margin: 0;">
             <button id="send-btn" onclick="sendMessage()" style="width: 80px; margin: 0;">Send</button>
@@ -194,6 +188,7 @@ socket.emit('go-online', { email: user.email, username: user.username });
     </script>
 </body>
 </html>
+
 
 
 
