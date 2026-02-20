@@ -7,53 +7,55 @@
     <title>Login</title>
 </head>
 <body>
-    <div id="auth-container">
+    <div id="auth-container" style="text-align: center; margin-top: 100px;">
         <h1>Login</h1>
-        <input type="email" id="login-email" placeholder="Email">
-        <input type="password" id="login-pass" placeholder="Password">
-        <button onclick="login()">Login</button>
-		<p><a href="#" onclick="forgotPassword()">Forgot Password?</a></p>
+        <input type="email" id="login-email" placeholder="Email" style="display:block; margin: 10px auto; padding: 10px;">
+        <input type="password" id="login-pass" placeholder="Password" style="display:block; margin: 10px auto; padding: 10px;">
+        <button onclick="login()" style="padding: 10px 20px; background: #4ecca3; border: none; cursor: pointer;">Login</button>
+        <p><a href="#" onclick="alert('Contact Admin for reset')">Forgot Password?</a></p>
+    </div>
 
-<script>
-async function login() {
-    const emailInput = document.getElementById('login-email').value.trim();
-    const passInput = document.getElementById('login-pass').value;
-    
-    // Admin check
-    if (emailInput === "Fordbenjamin2016@gmail.com" && passInput === "Admin") {
-        sessionStorage.setItem("currentUser", JSON.stringify({email: emailInput, username: "Ben"}));
-        window.location.href = 'dashboard.html';
-        return;
-    }
+    <script>
+        async function login() {
+            const emailInput = document.getElementById('login-email').value.trim();
+            const passInput = document.getElementById('login-pass').value;
+            const BASE_URL = 'https://crescendo-chat.onrender.com';
 
-    try {
-        // FIX: Points to /get-data specifically
-        const response = await fetch('https://crescendo-chat.onrender.com');
-        const allUsers = await response.json();
+            // Admin bypass
+            if (emailInput === "Fordbenjamin2016@gmail.com" && passInput === "Admin") {
+                sessionStorage.setItem("currentUser", JSON.stringify({email: emailInput, username: "Ben"}));
+                window.location.href = 'dashboard.html';
+                return;
+            }
 
-        // FIX: Converts both to lowercase so it's not case-sensitive
-        const userFound = allUsers.find(u => 
-            u.email.toLowerCase() === emailInput.toLowerCase() && 
-            u.password === passInput
-        );
+            try {
+                // FETCHING FROM /get-data TO AVOID SYNTAX ERROR
+                const response = await fetch(`${BASE_URL}/get-data`);
+                const allUsers = await response.json();
 
-        if (userFound) {
-            sessionStorage.setItem("currentUser", JSON.stringify({
-                email: userFound.email, 
-                username: userFound.username
-            }));
-            window.location.href = 'dashboard.html';
-        } else {
-            alert("Account not found or wrong password.");
+                // Case-insensitive email search
+                const userFound = allUsers.find(u => 
+                    u.email.toLowerCase() === emailInput.toLowerCase() && 
+                    u.password === passInput
+                );
+
+                if (userFound) {
+                    sessionStorage.setItem("currentUser", JSON.stringify({
+                        email: userFound.email, 
+                        username: userFound.username
+                    }));
+                    window.location.href = 'dashboard.html';
+                } else {
+                    alert("Account not found or wrong password.");
+                }
+            } catch (err) {
+                console.error("Login Error:", err);
+                alert("Server is waking up. Try again in 30 seconds!");
+            }
         }
-    } catch (err) {
-        console.error(err);
-        alert("Crescendo-Chat server is waking up. Try again in 30 seconds!");
-    }
-}
-document.addEventListener("keypress", (e) => { if(e.key === "Enter") login(); });
 
+        // Enter key support
+        document.addEventListener("keypress", (e) => { if(e.key === "Enter") login(); });
     </script>
 </body>
 </html>
-
