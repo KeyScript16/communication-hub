@@ -80,7 +80,35 @@ io.on('connection', (socket) => {
         io.emit('update-online-list', Object.keys(onlineUsers));
     });
 
-    // 1. Listen for the initial chat request
+    // --- ADD THESE NEW LISTENERS BELOW ---
+
+    // 1. Fixed Private Messaging
+    socket.on('private-message', (data) => {
+        const targetSocketId = onlineUsers[data.to];
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('new-message', data);
+        }
+    });
+
+    // 2. Fixed Typing Indicator
+    socket.on('typing', (data) => {
+        const targetSocketId = onlineUsers[data.to];
+        if (targetSocketId) {
+            // Forward the typing status to the friend
+            io.to(targetSocketId).emit('friend-typing', data);
+        }
+    });
+
+    // 3. Fixed Chat Ended / Leave Chat
+    socket.on('leave-chat', (friendEmail) => {
+        const targetSocketId = onlineUsers[friendEmail];
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('chat-ended-by-friend');
+        }
+    });
+
+    // --- END OF NEW LISTENERS ---
+
     socket.on('request-chat', (data) => {
         const targetSocketId = onlineUsers[data.to];
         if (targetSocketId) {
@@ -88,7 +116,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 2. Listen for the friend's response (Accept/Decline)
     socket.on('chat-response', (data) => {
         const requesterSocketId = onlineUsers[data.to];
         if (requesterSocketId) {
@@ -109,6 +136,8 @@ io.on('connection', (socket) => {
 
 
 
+
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
