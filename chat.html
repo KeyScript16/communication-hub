@@ -173,6 +173,19 @@ socket.emit('go-online', { email: user.email, username: user.username });
                     <button onclick="window.location.href='dashboard.html'">Back to Dashboard</button>
                 </div>`;
         });
+        function addEmoji(emoji) {
+    const input = document.getElementById('chat-input');
+    input.value += emoji; // Adds the emoji to whatever is already typed
+    input.focus(); // Keeps the cursor in the box so you can keep typing
+    
+    // Trigger the typing indicator so your friend knows you're active
+    socket.emit('typing', { 
+        to: friendEmail, 
+        fromName: user.username, 
+        isTyping: true 
+    });
+}
+
 
         document.addEventListener("keypress", (e) => { 
             if(e.key === "Enter") sendMessage(); 
@@ -181,6 +194,7 @@ socket.emit('go-online', { email: user.email, username: user.username });
     </script>
 </body>
 </html>
+
 
 
 
