@@ -80,13 +80,30 @@
             }
         }
 
-        function displayMessage(name, text) {
-            const history = document.getElementById('message-history');
-            const msgDiv = document.createElement('div');
-            msgDiv.innerHTML = `<strong style="color:#4ecca3">${name}:</strong> ${text}`;
-            history.appendChild(msgDiv);
-            history.scrollTop = history.scrollHeight;
-        }
+       function displayMessage(name, text) {
+    const history = document.getElementById('message-history');
+    const isMe = (name === "Me");
+    
+    // Create timestamp (e.g., 4:30 PM)
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const wrapper = document.createElement('div');
+    wrapper.classList.add('message-wrapper');
+    wrapper.classList.add(isMe ? 'me' : 'them');
+
+    wrapper.innerHTML = `
+        <div class="bubble">
+            <strong style="display:block; font-size:11px;">${name}</strong>
+            ${text}
+            <span class="timestamp">${timeStr}</span>
+        </div>
+    `;
+
+    history.appendChild(wrapper);
+    history.scrollTop = history.scrollHeight;
+}
+
 
         // --- AUDIO LOGIC ---
         function unlockAudio() {
@@ -148,5 +165,6 @@
     </script>
 </body>
 </html>
+
 
 
