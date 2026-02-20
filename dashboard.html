@@ -42,31 +42,31 @@
 
 
         socket.on('update-online-list', async (onlineEmails) => {
-            const listDiv = document.getElementById('friends-list');
-            listDiv.innerHTML = "<h3>Friends:</h3>"; 
+    const listDiv = document.getElementById('friends-list');
+    listDiv.innerHTML = "<h3>Friends:</h3>"; 
 
-            const response = await fetch(`${BASE_URL}/get-data`);
-            const allUsers = await response.json();
-            const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+    const response = await fetch(`${BASE_URL}/get-data`);
+    const allUsers = await response.json();
+    const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
 
-            if (me) {
-                if (me.requests && me.requests.length > 0) {
-                    let reqHtml = "<div style='background:rgba(78,204,163,0.1); padding:10px; border-radius:10px; margin-bottom:20px;'><h4>New Requests:</h4>";
-                    me.requests.forEach(s => {
-                        reqHtml += `<div style='display:flex; justify-content:space-between; margin-bottom:5px;'><span>${s}</span><button onclick="acceptFriend('${s}')">Accept</button></div>`;
-                    });
-                    listDiv.innerHTML = reqHtml + "</div>" + listDiv.innerHTML;
-                }
+    if (me) {
+        // ... (Keep your Friend Request logic here) ...
 
-                (me.friends || []).forEach(f => {
-                    const online = onlineEmails.includes(f);
-                    const row = document.createElement('div');
-                    row.style.margin = "10px 0";
-                    row.innerHTML = `<span>${f} ${online ? '●' : '○'}</span> ${online ? `<button onclick="startChat('${f}')">Chat</button>` : ''}`;
-                    listDiv.appendChild(row);
-                });
-            }
+        (me.friends || []).forEach(friendEmail => {
+            const online = onlineEmails.includes(friendEmail);
+            
+            // FIND THE USERNAME: Look through all users to find the name matching this email
+            const friendData = allUsers.find(u => u.email.toLowerCase() === friendEmail.toLowerCase());
+            const displayName = friendData ? friendData.username : friendEmail;
+
+            const row = document.createElement('div');
+            row.style.margin = "10px 0";
+            row.innerHTML = `<span>${displayName} ${online ? '●' : '○'}</span> ${online ? `<button onclick="startChat('${friendEmail}')">Chat</button>` : ''}`;
+            listDiv.appendChild(row);
         });
+    }
+});
+
 
         async function addFriend() {
             const target = prompt("Friend's email:");
@@ -145,6 +145,7 @@ socket.on('start-chat-confirmed', (data) => {
     </script>
 </body>
 </html>
+
 
 
 
