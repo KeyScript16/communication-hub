@@ -48,7 +48,18 @@ async function writeDB(data) {
         await pool.query('INSERT INTO site_data (content) VALUES ($1)', [JSON.stringify(data)]);
     } catch (err) { console.error("Write Error:", err); }
 }
+// A. Tell the server where your files (CSS, JS, Images) are
+app.use(express.static(__dirname));
 
+// B. Route for the Home/Login page
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// C. Route for the Dashboard
+app.get('/dashboard.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dashboard.html'));
+});
 // 3. API ROUTES
 app.get('/get-data', async (req, res) => {
     const data = await readDB();
@@ -101,5 +112,6 @@ io.on('connection', (socket) => {
 // 5. START SERVER (Fixed Port Binding)
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
