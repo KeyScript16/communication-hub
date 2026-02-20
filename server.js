@@ -25,14 +25,11 @@ initDB();
 // 2. MIDDLEWARE
 app.use(cors()); 
 app.use(express.json());
-
-// STATIC FILES MUST BE ABOVE ROUTES to fix MIME errors
 app.use(express.static(path.join(__dirname))); 
 
 async function readDB() {
     try {
         const res = await pool.query('SELECT content FROM site_data LIMIT 1');
-        // Correctly access the JSONB content from the first row
         if (res.rows && res.rows[0] && res.rows[0].content) {
             return res.rows[0].content; 
         }
@@ -51,13 +48,8 @@ async function writeDB(data) {
 }
 
 // 3. PAGE ROUTES
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.get('/dashboard.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dashboard.html'));
-});
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/dashboard.html', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
 
 // 4. API ROUTES
 app.get('/get-data', async (req, res) => {
@@ -69,24 +61,23 @@ app.post('/save-data', async (req, res) => {
     await writeDB(req.body);
     res.json({ status: "Saved!" });
 });
+
 // 5. SOCKET.IO LOGIC
 const io = new Server(server, { cors: { origin: "*" } });
 let onlineUsers = {}; 
 
-let onlineUsers = {}; 
-
-socket.on('go-online', (data) => {
-    // data is now { email: "...", username: "..." }
-    onlineUsers[data.email] = socket.id; 
+// FIXED: Added the missing connection block
+io.on('connection', (socket) => {
     
-    // Broadcast just the emails for the "Online" dots list
-    io.emit('update-online-list', Object.keys(onlineUsers));
-});
+    socket.on('go-online', (data) => {
+        // Safety check for object vs string
+        const email = (typeof data === 'object') ? data.email : data;
+        if (email) {
+            onlineUsers[email] = socket.id; 
+            io.emit('update-online-list', Object.keys(onlineUsers));
+        }
+    });
 
-
-    // --- ADD THESE NEW LISTENERS BELOW ---
-
-    // 1. Fixed Private Messaging
     socket.on('private-message', (data) => {
         const targetSocketId = onlineUsers[data.to];
         if (targetSocketId) {
@@ -94,24 +85,19 @@ socket.on('go-online', (data) => {
         }
     });
 
-    // 2. Fixed Typing Indicator
     socket.on('typing', (data) => {
         const targetSocketId = onlineUsers[data.to];
         if (targetSocketId) {
-            // Forward the typing status to the friend
             io.to(targetSocketId).emit('friend-typing', data);
         }
     });
 
-    // 3. Fixed Chat Ended / Leave Chat
     socket.on('leave-chat', (friendEmail) => {
         const targetSocketId = onlineUsers[friendEmail];
         if (targetSocketId) {
             io.to(targetSocketId).emit('chat-ended-by-friend');
         }
     });
-
-    // --- END OF NEW LISTENERS ---
 
     socket.on('request-chat', (data) => {
         const targetSocketId = onlineUsers[data.to];
@@ -138,13 +124,5 @@ socket.on('go-online', (data) => {
     });
 });
 
-
-
-
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-
-
-
-
