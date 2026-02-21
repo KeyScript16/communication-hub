@@ -16,10 +16,28 @@ const pool = new Pool({
 
 const initDB = async () => {
     try {
+        // 1. Create the original data table
         await pool.query('CREATE TABLE IF NOT EXISTS site_data (id SERIAL PRIMARY KEY, content JSONB)');
-        console.log("Database Table Ready");
-    } catch (err) { console.error("DB Init Error:", err); }
+        
+        // 2. Create the NEW Group Chat table (The "Backdoor" fix)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS chat_groups (
+                id SERIAL PRIMARY KEY,
+                group_name TEXT NOT NULL,
+                description TEXT,
+                creator_email TEXT NOT NULL,
+                members JSONB DEFAULT '[]',
+                pending_invites JSONB DEFAULT '[]',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        console.log("Database Tables Verified & Ready ✅");
+    } catch (err) { 
+        console.error("DB Init Error:", err); 
+    }
 };
+
 initDB();
 
 // 2. MIDDLEWARE
@@ -126,3 +144,4 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
