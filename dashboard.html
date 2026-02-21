@@ -12,24 +12,32 @@
     <div id="main-content" style="width: 450px;">
         <h1>Dashboard</h1>
         <p>Welcome, <span id="display-name">Loading...</span></p>
-        <div id="friends-list" style="margin-top: 20px; text-align: left;"></div>
-        <div id="clubs-container" style="max-width: 500px; margin: 20px auto; color: white;">
-    <!-- SECTION: PENDING INVITES -->
-    <div id="pending-section" style="display:none; margin-bottom: 30px;">
-        <h3 style="color: #4ecca3;">Club Invites 📩</h3>
-        <div id="pending-list"></div>
-    </div>
 
-    <!-- SECTION: ACTIVE CLUBS -->
-    <div id="active-section">
-        <h3 style="color: #4ecca3;">Your Clubs 🚀</h3>
-        <div id="active-list">Loading your clubs...</div>
-    </div>
-</div>
+        <!-- ADMIN ONLY SECTION -->
+        <button id="admin-reset-btn" onclick="securePurge()" style="display:none; margin-top: 20px; background: #ff4d4d; color: white; border: 2px solid white; padding: 15px; width: 100%; font-weight: bold; cursor: pointer;">
+            🔥 ADMIN: RESET ENTIRE SYSTEM
+        </button>
 
-        <button onclick="addFriend()" style="margin-top: 20px; background: #4ecca3; color: #1a1a2e;">Add New Friend</button>
-        <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; background: rgba(78, 204, 163, 0.2); border: 1px solid #4ecca3; color: #4ecca3;">Create New Group</button>
-        <button onclick="logout()" style="margin-top: 10px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">Logout</button>
+        <!-- USER ONLY SECTION -->
+        <div id="user-ui">
+            <div id="friends-list" style="margin-top: 20px; text-align: left;"></div>
+            <div id="clubs-container" style="max-width: 500px; margin: 20px auto; color: white;">
+                <div id="pending-section" style="display:none; margin-bottom: 30px;">
+                    <h3 style="color: #4ecca3;">Club Invites 📩</h3>
+                    <div id="pending-list"></div>
+                </div>
+                <div id="active-section">
+                    <h3 style="color: #4ecca3;">Your Clubs 🚀</h3>
+                    <div id="active-list">Loading your clubs...</div>
+                </div>
+            </div>
+
+            <button onclick="addFriend()" style="margin-top: 20px; background: #4ecca3; color: #1a1a2e; width: 100%;">Add New Friend</button>
+            <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; background: rgba(78, 204, 163, 0.2); border: 1px solid #4ecca3; color: #4ecca3; width: 100%;">Create New Group</button>
+        </div>
+
+        <!-- ALWAYS VISIBLE -->
+        <button onclick="logout()" style="margin-top: 20px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); width: 100%;">Logout</button>
     </div>
 
     <script>
@@ -38,97 +46,128 @@
         if (!userData) window.location.href = 'index.html';
         const user = JSON.parse(userData);
 
-        // Define socket globally so all functions can use it
         const socket = io(BASE_URL);
 
-       async function init() {
-    document.getElementById('display-name').innerText = user.username;
-    try {
-        await fetch(`${BASE_URL}/get-data`);
-        console.log("Server Awake");
-        
-        // UPDATED LINE: Send an object instead of just an email string
-        socket.emit('go-online', { email: user.email, username: user.username }); 
-        
-    } catch(e) { 
-        console.log("Waking up..."); 
-    }
-           if (user.isAdmin === true) {
-    document.getElementById('admin-reset-btn').style.display = "block";
-}
-
-}
-
-
-        socket.on('update-online-list', async (onlineEmails) => {
-    const listDiv = document.getElementById('friends-list');
-    listDiv.innerHTML = "<h3>Friends:</h3>"; 
-
-    const response = await fetch(`${BASE_URL}/get-data`);
-    const allUsers = await response.json();
-    const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
-
-    if (me) {
-        // ... (Keep your Friend Request logic here) ...
-
-        (me.friends || []).forEach(friendEmail => {
-            const online = onlineEmails.includes(friendEmail);
+        async function init() {
+            document.getElementById('display-name').innerText = user.username;
             
-            // FIND THE USERNAME: Look through all users to find the name matching this email
-            const friendData = allUsers.find(u => u.email.toLowerCase() === friendEmail.toLowerCase());
-            const displayName = friendData ? friendData.username : friendEmail;
+            const adminBtn = document.getElementById('admin-reset-btn');
+            const userUI = document.getElementById('user-ui');
 
-            const row = document.createElement('div');
-            row.style.margin = "10px 0";
-            row.innerHTML = `<span>${displayName} ${online ? '●' : '○'}</span> ${online ? `<button onclick="startChat('${friendEmail}')">Chat</button>` : ''}`;
-            listDiv.appendChild(row);
+            if (user.isAdmin === true) {
+                // Admin Mode: Show reset, hide everything else
+                adminBtn.style.display = "block";
+                userUI.style.display = "none";
+            } else {
+                // User Mode: Normal view
+                adminBtn.style.display = "none";
+                userUI.style.display = "block";
+
+                try {
+                    await fetch(`${BASE_URL}/get-data`);
+                    socket.emit('go-online', { email: user.email, username: user.username }); 
+                    loadMyGroups();
+                } catch(e) { 
+                    console.log("Waking up..."); 
+                }
+            }
+        }
+
+        async function securePurge() {
+            if (!confirm("Are you sure? This deletes ALL users and clubs forever.")) return;
+            
+            const response = await fetch(`${BASE_URL}/admin/reset-all-data`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    adminPassword: "you must know what you're doing in order to delete everything." 
+                })
+            });
+
+            if (response.ok) {
+                alert("System Purged!");
+                logout();
+            } else {
+                alert("Error: Password mismatch or server error.");
+            }
+        }
+
+        async function loadMyGroups() {
+            try {
+                const response = await fetch(`${BASE_URL}/get-my-groups?email=${user.email}`);
+                const { joined, pending } = await response.json();
+
+                const pendingDiv = document.getElementById('pending-list');
+                const pendingSection = document.getElementById('pending-section');
+                
+                if (pending && pending.length > 0) {
+                    pendingSection.style.display = "block";
+                    pendingDiv.innerHTML = pending.map(group => `
+                        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            <div><strong>${group.group_name}</strong></div>
+                            <button onclick="acceptInvite(${group.id})" style="padding: 5px 10px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 5px; cursor: pointer;">Join</button>
+                        </div>
+                    `).join('');
+                } else {
+                    pendingSection.style.display = "none";
+                }
+
+                const activeDiv = document.getElementById('active-list');
+                if (joined && joined.length > 0) {
+                    activeDiv.innerHTML = joined.map(group => `
+                        <div style="background: rgba(78, 204, 163, 0.1); border: 1px solid #4ecca3; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
+                            <strong>${group.group_name}</strong>
+                        </div>
+                    `).join('');
+                } else {
+                    activeDiv.innerHTML = "No clubs joined yet.";
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function acceptInvite(groupId) {
+            const res = await fetch(`${BASE_URL}/accept-group`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupId, email: user.email })
+            });
+            if (res.ok) loadMyGroups();
+        }
+
+        // --- FRIENDS LOGIC ---
+        socket.on('update-online-list', async (onlineEmails) => {
+            const listDiv = document.getElementById('friends-list');
+            listDiv.innerHTML = "<h3>Friends:</h3>"; 
+            const response = await fetch(`${BASE_URL}/get-data`);
+            const allUsers = await response.json();
+            const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+            if (me && me.friends) {
+                me.friends.forEach(friendEmail => {
+                    const online = onlineEmails.includes(friendEmail);
+                    const friendData = allUsers.find(u => u.email.toLowerCase() === friendEmail.toLowerCase());
+                    const displayName = friendData ? friendData.username : friendEmail;
+                    const row = document.createElement('div');
+                    row.style.margin = "10px 0";
+                    row.innerHTML = `<span>${displayName} ${online ? '●' : '○'}</span> ${online ? `<button onclick="startChat('${friendEmail}')">Chat</button>` : ''}`;
+                    listDiv.appendChild(row);
+                });
+            }
         });
-    }
-});
-
 
         async function addFriend() {
             const target = prompt("Friend's email:");
             if (!target || target === user.email) return;
-
             const res = await fetch(`${BASE_URL}/get-data`);
             let users = await res.json();
             let friend = users.find(u => u.email.toLowerCase() === target.toLowerCase());
-
             if (friend) {
                 friend.requests = friend.requests || [];
                 if (!friend.requests.includes(user.email)) {
                     friend.requests.push(user.email);
-                    await fetch(`${BASE_URL}/save-data`, { 
-                        method: 'POST', 
-                        headers: { 'Content-Type': 'application/json' }, 
-                        body: JSON.stringify(users) 
-                    });
+                    await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
                     alert("Request Sent!");
                 }
             } else alert("User not found");
-        }
-
-        async function acceptFriend(sender) {
-            const res = await fetch(`${BASE_URL}/get-data`);
-            let users = await res.json();
-            let me = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
-            let them = users.find(u => u.email.toLowerCase() === sender.toLowerCase());
-
-            if(me && them) {
-                me.friends = me.friends || []; 
-                them.friends = them.friends || [];
-                if(!me.friends.includes(sender)) me.friends.push(sender);
-                if(!them.friends.includes(user.email)) them.friends.push(user.email);
-                me.requests = me.requests.filter(r => r !== sender);
-
-                await fetch(`${BASE_URL}/save-data`, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify(users) 
-                });
-                location.reload();
-            }
         }
 
         function startChat(f) {
@@ -142,95 +181,9 @@
             }
         });
 
-        socket.on('start-chat-confirmed', (d) => {
-            if(d.accepted) window.location.href = `chat.html?with=${d.fromEmail}`;
-        });
-
-        function logout() { 
-            sessionStorage.clear(); 
-            window.location.href = 'index.html'; 
-        }
-        // This listener handles the "Success" signal after the friend clicks 'Accept'
-socket.on('start-chat-confirmed', (data) => {
-    console.log("Chat accepted by:", data.fromEmail);
-    if (data.accepted) {
-        // This moves the person who SENT the request to the chat page
-        window.location.href = `chat.html?with=${data.fromEmail}`;
-    }
-});
-        async function loadMyGroups() {
-    const user = JSON.parse(sessionStorage.getItem("currentUser"));
-    if (!user) return;
-
-    try {
-        const response = await fetch(`${BASE_URL}/get-my-groups?email=${user.email}`);
-        const { joined, pending } = await response.json();
-
-        // 1. Handle Pending Invites
-        const pendingDiv = document.getElementById('pending-list');
-        const pendingSection = document.getElementById('pending-section');
-        
-        if (pending.length > 0) {
-            pendingSection.style.display = "block";
-            pendingDiv.innerHTML = pending.map(group => `
-                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong>${group.group_name}</strong><br>
-                        <small style="opacity: 0.7;">${group.description || 'No description'}</small>
-                    </div>
-                    <button onclick="acceptInvite(${group.id})" style="padding: 5px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 5px; cursor: pointer;">Join</button>
-                </div>
-            `).join('');
-        } else {
-            pendingSection.style.display = "none";
-        }
-
-        // 2. Handle Joined Clubs
-        const activeDiv = document.getElementById('active-list');
-        if (joined.length > 0) {
-            activeDiv.innerHTML = joined.map(group => `
-                <div style="background: rgba(78, 204, 163, 0.1); border: 1px solid #4ecca3; padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer;" onclick="openClubChat(${group.id})">
-                    <strong>${group.group_name}</strong>
-                    <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.8;">${group.description || 'Welcome to the club!'}</p>
-                </div>
-            `).join('');
-        } else {
-            activeDiv.innerHTML = "<p>No active clubs yet. Create one or wait for an invite!</p>";
-        }
-    } catch (err) {
-        console.error("Error loading groups:", err);
-    }
-}
-
-// 3. Logic to Accept an Invite
-async function acceptInvite(groupId) {
-    const user = JSON.parse(sessionStorage.getItem("currentUser"));
-    const response = await fetch(`${BASE_URL}/accept-group`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupId, email: user.email })
-    });
-
-    if (response.ok) {
-        alert("Joined the club!");
-        loadMyGroups(); // Refresh lists
-    }
-}
-
-// Initial Load
-loadMyGroups();
-
-
+        function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
         init();
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
