@@ -13,6 +13,20 @@
         <h1>Dashboard</h1>
         <p>Welcome, <span id="display-name">Loading...</span></p>
         <div id="friends-list" style="margin-top: 20px; text-align: left;"></div>
+        <div id="clubs-container" style="max-width: 500px; margin: 20px auto; color: white;">
+    <!-- SECTION: PENDING INVITES -->
+    <div id="pending-section" style="display:none; margin-bottom: 30px;">
+        <h3 style="color: #4ecca3;">Club Invites 📩</h3>
+        <div id="pending-list"></div>
+    </div>
+
+    <!-- SECTION: ACTIVE CLUBS -->
+    <div id="active-section">
+        <h3 style="color: #4ecca3;">Your Clubs 🚀</h3>
+        <div id="active-list">Loading your clubs...</div>
+    </div>
+</div>
+
         <button onclick="addFriend()" style="margin-top: 20px; background: #4ecca3; color: #1a1a2e;">Add New Friend</button>
         <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; background: rgba(78, 204, 163, 0.2); border: 1px solid #4ecca3; color: #4ecca3;">Create New Group</button>
         <button onclick="logout()" style="margin-top: 10px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">Logout</button>
@@ -146,6 +160,7 @@ socket.on('start-chat-confirmed', (data) => {
     </script>
 </body>
 </html>
+
 
 
 
