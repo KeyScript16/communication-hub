@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Group - Crescendo</title>
+    <link rel="stylesheet" href="css.css">
+</head>
+<body>
+    <div id="main-content" style="width: 400px;">
+        <h1>Create a Group</h1>
+        
+        <label style="display:block; text-align:left; font-size:12px; color:#4ecca3;">GROUP NAME</label>
+        <input type="text" id="group-name" placeholder="The Dev Squad...">
+
+        <label style="display:block; text-align:left; font-size:12px; color:#4ecca3; margin-top:15px;">DESCRIPTION (OPTIONAL)</label>
+        <input type="text" id="group-desc" placeholder="What's this group about?">
+
+        <!-- FRIENDS LIST TO INVITE -->
+        <div id="invite-section" style="margin-top:20px; text-align:left;">
+            <h4 style="margin-bottom:10px;">Invite Friends:</h4>
+            <div id="friends-checkbox-list" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
+                Loading friends...
+            </div>
+        </div>
+
+        <button onclick="createGroup()">Launch Group 🚀</button>
+        <button onclick="window.location.href='dashboard.html'" style="background:none; color:#4ecca3;">Cancel</button>
+    </div>
+
+    <script>
+        const BASE_URL = 'https://crescendo-chat.onrender.com';
+        const user = JSON.parse(sessionStorage.getItem("currentUser"));
+
+        // 1. Load friends to show as checkboxes
+        async function loadFriends() {
+            const res = await fetch(`${BASE_URL}/get-data`);
+            const allUsers = await res.json();
+            const me = allUsers.find(u => u.email === user.email);
+            
+            const listDiv = document.getElementById('friends-checkbox-list');
+            listDiv.innerHTML = "";
+
+            if (me && me.friends && me.friends.length > 0) {
+                me.friends.forEach(fEmail => {
+                    const row = document.createElement('div');
+                    row.innerHTML = `
+                        <input type="checkbox" name="friend" value="${fEmail}" style="width:auto; margin-right:10px;">
+                        <span>${fEmail}</span>
+                    `;
+                    listDiv.appendChild(row);
+                });
+            } else {
+                listDiv.innerHTML = "No friends to invite yet.";
+            }
+        }
+
+        // 2. The Logic to save the group
+        async function createGroup() {
+            const name = document.getElementById('group-name').value;
+            const desc = document.getElementById('group-desc').value;
+            const selectedFriends = Array.from(document.querySelectorAll('input[name="friend"]:checked')).map(cb => cb.value);
+
+            if (!name) return alert("Give your group a name!");
+
+            // Send to server (we will build this endpoint next)
+            const response = await fetch(`${BASE_URL}/create-new-group`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    groupName: name,
+                    description: desc,
+                    creator: user.email,
+                    invited: selectedFriends
+                })
+            });
+
+            if (response.ok) {
+                alert("Group Created & Invites Sent!");
+                window.location.href = 'dashboard.html';
+            }
+        }
+
+        loadFriends();
+    </script>
+</body>
+</html>
