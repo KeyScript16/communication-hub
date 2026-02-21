@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Club Chat</title>
+    <link rel="stylesheet" href="css.css">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <div id="main-content" style="width: 500px; height: 80vh; display: flex; flex-direction: column;">
+        <h1 id="chat-header">Club Chat</h1>
+        <div id="message-history" style="flex-grow: 1; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 15px;"></div>
+        
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="chat-input" placeholder="Message the club...">
+            <button onclick="sendMessage()" style="width: 80px;">Send</button>
+        </div>
+        <button onclick="window.location.href='dashboard.html'" style="background: none; color: #4ecca3; margin-top: 10px;">Exit Club</button>
+    </div>
+
+    <script>
+        const BASE_URL = 'https://crescendo-chat.onrender.com';
+        const socket = io(BASE_URL);
+        const user = JSON.parse(sessionStorage.getItem("currentUser"));
+        const params = new URLSearchParams(window.location.search);
+        const groupId = params.get('id'); // Get the Club ID from URL
+
+        if (!user || !groupId) window.location.href = 'dashboard.html';
+
+        // 1. Tell Server we are joining this specific club room
+        socket.emit('join-club', groupId);
+
+        // 2. Receive messages from others in the club
+        socket.on('new-club-message', (data) => {
+            displayMessage(data.fromName, data.message);
+        });
+
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const msg = input.value;
+            if (msg) {
+                // Send to the whole room
+                socket.emit('club-message', { 
+                    groupId: groupId, 
+                    message: msg, 
+                    fromName: user.username 
+                });
+                displayMessage("Me", msg);
+                input.value = "";
+            }
+        }
+
+        function displayMessage(name, text) {
+            const history = document.getElementById('message-history');
+            const div = document.createElement('div');
+            div.style.marginBottom = "10px";
+            div.innerHTML = `<strong style="color:#4ecca3">${name}:</strong> ${text}`;
+            history.appendChild(div);
+            history.scrollTop = history.scrollHeight;
+        }
+
+        document.addEventListener("keypress", (e) => { if(e.key === "Enter") sendMessage(); });
+    </script>
+</body>
+</html>
