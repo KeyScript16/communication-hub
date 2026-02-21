@@ -154,12 +154,75 @@ socket.on('start-chat-confirmed', (data) => {
         window.location.href = `chat.html?with=${data.fromEmail}`;
     }
 });
+        async function loadMyGroups() {
+    const user = JSON.parse(sessionStorage.getItem("currentUser"));
+    if (!user) return;
+
+    try {
+        const response = await fetch(`${BASE_URL}/get-my-groups?email=${user.email}`);
+        const { joined, pending } = await response.json();
+
+        // 1. Handle Pending Invites
+        const pendingDiv = document.getElementById('pending-list');
+        const pendingSection = document.getElementById('pending-section');
+        
+        if (pending.length > 0) {
+            pendingSection.style.display = "block";
+            pendingDiv.innerHTML = pending.map(group => `
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>${group.group_name}</strong><br>
+                        <small style="opacity: 0.7;">${group.description || 'No description'}</small>
+                    </div>
+                    <button onclick="acceptInvite(${group.id})" style="padding: 5px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 5px; cursor: pointer;">Join</button>
+                </div>
+            `).join('');
+        } else {
+            pendingSection.style.display = "none";
+        }
+
+        // 2. Handle Joined Clubs
+        const activeDiv = document.getElementById('active-list');
+        if (joined.length > 0) {
+            activeDiv.innerHTML = joined.map(group => `
+                <div style="background: rgba(78, 204, 163, 0.1); border: 1px solid #4ecca3; padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer;" onclick="openClubChat(${group.id})">
+                    <strong>${group.group_name}</strong>
+                    <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.8;">${group.description || 'Welcome to the club!'}</p>
+                </div>
+            `).join('');
+        } else {
+            activeDiv.innerHTML = "<p>No active clubs yet. Create one or wait for an invite!</p>";
+        }
+    } catch (err) {
+        console.error("Error loading groups:", err);
+    }
+}
+
+// 3. Logic to Accept an Invite
+async function acceptInvite(groupId) {
+    const user = JSON.parse(sessionStorage.getItem("currentUser"));
+    const response = await fetch(`${BASE_URL}/accept-group`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId, email: user.email })
+    });
+
+    if (response.ok) {
+        alert("Joined the club!");
+        loadMyGroups(); // Refresh lists
+    }
+}
+
+// Initial Load
+loadMyGroups();
+
 
 
         init();
     </script>
 </body>
 </html>
+
 
 
 
