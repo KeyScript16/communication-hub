@@ -23,16 +23,17 @@
     const BASE_URL = 'https://crescendo-chat.onrender.com';
 
     // 1. ADMIN BYPASS (Change "Admin" to "BenAdmin" or something unique)
-    if (emailInput === "ALL_COWS_EAT_GRASS" && passInput === "Admin") {
-        // We set a special flag "isAdmin: true" so the dashboard knows it's the Admin login
-        sessionStorage.setItem("currentUser", JSON.stringify({
-            email: emailInput, 
-            username: "SYSTEM ADMIN",
-            isAdmin: true 
-        }));
-        window.location.href = 'dashboard.html';
-        return;
-    }
+    // Admin bypass
+if (emailInput === "Fordbenjamin2016@gmail.com" && passInput === "Admin") {
+    sessionStorage.setItem("currentUser", JSON.stringify({
+        email: emailInput, 
+        username: "Admin Ben",
+        isAdmin: true // <--- ADD THIS LINE
+    }));
+    window.location.href = 'dashboard.html';
+    return;
+}
+
 
     // 2. REGULAR LOGIN (For your 'benrito16' test account and others)
     try {
@@ -65,5 +66,6 @@
     </script>
 </body>
 </html>
+
 
 
