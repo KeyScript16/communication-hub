@@ -203,8 +203,27 @@ io.on('connection', (socket) => {
         io.emit('update-online-list', Object.keys(onlineUsers));
     });
 });
+app.post('/admin/reset-all-data', async (req, res) => {
+    const { adminPassword } = req.body;
+    const SECRET_KEY = "you must know what you're doing in order to delete everything."; // <--- CHANGE THIS!
+
+    if (adminPassword !== SECRET_KEY) {
+        return res.status(403).json({ error: "Access Denied: Invalid Admin Password" });
+    }
+
+    try {
+        // This clears groups, resets IDs, and clears the user list (site_data)
+        await pool.query('TRUNCATE TABLE chat_groups, site_data RESTART IDENTITY CASCADE');
+        res.json({ status: "System Purged! All data wiped and IDs reset." });
+    } catch (err) {
+        console.error("Reset Error:", err);
+        res.status(500).json({ error: "Failed to reset data." });
+    }
+});
+
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
