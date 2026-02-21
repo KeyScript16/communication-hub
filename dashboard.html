@@ -53,6 +53,10 @@
     } catch(e) { 
         console.log("Waking up..."); 
     }
+           if (user.isAdmin === true) {
+    document.getElementById('admin-reset-btn').style.display = "block";
+}
+
 }
 
 
@@ -222,6 +226,7 @@ loadMyGroups();
     </script>
 </body>
 </html>
+
 
 
 
