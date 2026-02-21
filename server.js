@@ -79,6 +79,68 @@ app.post('/save-data', async (req, res) => {
     await writeDB(req.body);
     res.json({ status: "Saved!" });
 });
+// --- NEW GROUP ROUTES ---
+
+// 1. Create the Group in the DB
+app.post('/create-new-group', async (req, res) => {
+    const { groupName, description, creator, invited } = req.body;
+    try {
+        await pool.query(
+            'INSERT INTO chat_groups (group_name, description, creator_email, pending_invites, members) VALUES ($1, $2, $3, $4, $5)',
+            [groupName, description, creator, JSON.stringify(invited), JSON.stringify([creator])]
+        );
+        res.json({ status: "Group Created!" });
+    } catch (err) {
+        console.error("Group Create Error:", err);
+        res.status(500).json({ error: "DB Error" });
+    }
+});
+
+// 2. Get Groups for a specific user (Invites + Joined)
+app.get('/get-my-groups', async (req, res) => {
+    const { email } = req.query;
+    try {
+        // Find groups where user is either a member OR has a pending invite
+        const result = await pool.query(
+            "SELECT * FROM chat_groups WHERE members @> $1 OR pending_invites @> $1",
+            [JSON.stringify([email])]
+        );
+        
+        const joined = result.rows.filter(g => g.members.includes(email));
+        const pending = result.rows.filter(g => g.pending_invites.includes(email));
+        
+        res.json({ joined, pending });
+    } catch (err) {
+        console.error("Fetch Groups Error:", err);
+        res.status(500).json({ joined: [], pending: [] });
+    }
+});
+
+// 3. Accept a Group Invite
+app.post('/accept-group', async (req, res) => {
+    const { groupId, email } = req.body;
+    try {
+        const groupRes = await pool.query('SELECT * FROM chat_groups WHERE id = $1', [groupId]);
+        const group = groupRes.rows[0];
+
+        if (group) {
+            let members = group.members || [];
+            let pending = group.pending_invites || [];
+
+            if (!members.includes(email)) members.push(email);
+            pending = pending.filter(e => e !== email);
+
+            await pool.query(
+                'UPDATE chat_groups SET members = $1, pending_invites = $2 WHERE id = $3',
+                [JSON.stringify(members), JSON.stringify(pending), groupId]
+            );
+            res.json({ status: "Joined!" });
+        }
+    } catch (err) {
+        res.status(500).send("Error joining");
+    }
+});
+
 
 // 5. SOCKET.IO LOGIC
 const io = new Server(server, { cors: { origin: "*" } });
@@ -144,4 +206,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
