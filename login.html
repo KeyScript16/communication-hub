@@ -18,46 +18,52 @@
 
     <script>
         async function login() {
-            const emailInput = document.getElementById('login-email').value.trim();
-            const passInput = document.getElementById('login-pass').value;
-            const BASE_URL = 'https://crescendo-chat.onrender.com';
+    const emailInput = document.getElementById('login-email').value.trim();
+    const passInput = document.getElementById('login-pass').value;
+    const BASE_URL = 'https://crescendo-chat.onrender.com';
 
-            // Admin bypass
-            if (emailInput === "Fordbenjamin2016@gmail.com" && passInput === "Admin") {
-                sessionStorage.setItem("currentUser", JSON.stringify({email: emailInput, username: "Ben"}));
-                window.location.href = 'dashboard.html';
-                return;
-            }
+    // 1. ADMIN BYPASS (Change "Admin" to "BenAdmin" or something unique)
+    if (emailInput === "ALL_COWS_EAT_GRASS" && passInput === "Admin") {
+        // We set a special flag "isAdmin: true" so the dashboard knows it's the Admin login
+        sessionStorage.setItem("currentUser", JSON.stringify({
+            email: emailInput, 
+            username: "SYSTEM ADMIN",
+            isAdmin: true 
+        }));
+        window.location.href = 'dashboard.html';
+        return;
+    }
 
-            try {
-                // FETCHING FROM /get-data TO AVOID SYNTAX ERROR
-                const response = await fetch(`${BASE_URL}/get-data`);
-                const allUsers = await response.json();
+    // 2. REGULAR LOGIN (For your 'benrito16' test account and others)
+    try {
+        const response = await fetch(`${BASE_URL}/get-data`);
+        const allUsers = await response.json();
 
-                // Case-insensitive email search
-                const userFound = allUsers.find(u => 
-                    u.email.toLowerCase() === emailInput.toLowerCase() && 
-                    u.password === passInput
-                );
+        const userFound = allUsers.find(u => 
+            u.email.toLowerCase() === emailInput.toLowerCase() && 
+            u.password === passInput
+        );
 
-                if (userFound) {
-                    sessionStorage.setItem("currentUser", JSON.stringify({
-                        email: userFound.email, 
-                        username: userFound.username
-                    }));
-                    window.location.href = 'dashboard.html';
-                } else {
-                    alert("Account not found or wrong password.");
-                }
-            } catch (err) {
-                console.error("Login Error:", err);
-                alert("Server is waking up. Try again in 30 seconds!");
-            }
+        if (userFound) {
+            sessionStorage.setItem("currentUser", JSON.stringify({
+                email: userFound.email, 
+                username: userFound.username,
+                isAdmin: false // Regular user
+            }));
+            window.location.href = 'dashboard.html';
+        } else {
+            alert("Account not found or wrong password.");
         }
+    } catch (err) {
+        alert("Server is waking up... Try again in a few seconds.");
+    }
+}
+
 
         // Enter key support
         document.addEventListener("keypress", (e) => { if(e.key === "Enter") login(); });
     </script>
 </body>
 </html>
+
 
