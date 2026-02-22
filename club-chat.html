@@ -4,18 +4,49 @@
     <meta charset="UTF-8">
     <title>Club Chat</title>
     <link rel="stylesheet" href="css.css">
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io"></script>
+    <link rel="icon" type="image/png" href="favicon-32x32.png">
 </head>
 <body>
-    <div id="main-content" style="width: 500px; height: 80vh; display: flex; flex-direction: column;">
-        <h1 id="chat-header">Club Chat</h1>
-        <div id="message-history" style="flex-grow: 1; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 15px;"></div>
+    <!-- 1. The Main Layout with Flexbox -->
+    <div id="main-content" style="width: 750px; height: 85vh; display: flex; gap: 20px;">
         
-        <div style="display: flex; gap: 10px;">
-            <input type="text" id="chat-input" placeholder="Message the club...">
-            <button onclick="sendMessage()" style="width: 80px;">Send</button>
+        <!-- LEFT: CHAT AREA -->
+        <div style="flex: 3; display: flex; flex-direction: column;">
+            <h1 id="chat-header">Club Chat</h1>
+            
+            <!-- GATEKEEPER MESSAGE -->
+            <div id="status-msg" style="height: 30px; font-weight: bold; color: #ff4d4d; font-style: italic;">
+                Checking members online...
+            </div>
+
+            <div id="message-history" style="flex-grow: 1; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 15px;"></div>
+            
+            <!-- EMOJI BAR -->
+            <div id="emoji-bar" style="margin-bottom: 10px; display: none; gap: 10px; padding: 5px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                <span onclick="addEmoji('🔥')" style="cursor:pointer; font-size: 20px;">🔥</span>
+                <span onclick="addEmoji('🚀')" style="cursor:pointer; font-size: 20px;">🚀</span>
+                <span onclick="addEmoji('💯')" style="cursor:pointer; font-size: 20px;">💯</span>
+                <span onclick="addEmoji('✨')" style="cursor:pointer; font-size: 20px;">✨</span>
+            </div>
+
+            <!-- INPUT AREA (Locked by default) -->
+            <div id="input-area" style="display: none; gap: 10px;">
+                <input type="text" id="chat-input" placeholder="Message the club..." style="flex-grow: 1; margin: 0;">
+                <button onclick="sendMessage()" style="width: 80px; margin: 0;">Send</button>
+            </div>
+
+            <button onclick="window.location.href='dashboard.html'" style="background: none; color: #4ecca3; margin-top: 10px; width: fit-content;">Back to Dashboard</button>
         </div>
-        <button onclick="window.location.href='dashboard.html'" style="background: none; color: #4ecca3; margin-top: 10px;">Exit Club</button>
+
+        <!-- RIGHT: SIDEBAR (Online List) -->
+        <div style="flex: 1; min-width: 150px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; border-left: 1px solid rgba(78, 204, 163, 0.3);">
+            <h4 style="color: #4ecca3; margin-top: 0;">Online: <span id="online-count">0</span></h4>
+            <hr style="border: 0.1px solid rgba(255,255,255,0.1);">
+            <ul id="online-users-list" style="list-style: none; padding: 0; font-size: 14px; color: white;">
+                <!-- Users listed here -->
+            </ul>
+        </div>
     </div>
 
     <script>
@@ -23,40 +54,63 @@
         const socket = io(BASE_URL);
         const user = JSON.parse(sessionStorage.getItem("currentUser"));
         const params = new URLSearchParams(window.location.search);
-        const groupId = params.get('id'); // Get the Club ID from URL
+        const groupId = params.get('id');
 
         if (!user || !groupId) window.location.href = 'dashboard.html';
 
-        // 1. Tell Server we are joining this specific club room
-        socket.emit('join-club', groupId);
+        // 1. Join Room immediately
+        socket.emit('join-club', { groupId, username: user.username });
 
-        // 2. Receive messages from others in the club
-        socket.on('new-club-message', (data) => {
-            displayMessage(data.fromName, data.message);
+        // 2. Handle Status & Gatekeeping
+        socket.on('club-status', (data) => {
+            const statusMsg = document.getElementById('status-msg');
+            const inputArea = document.getElementById('input-area');
+            const emojiBar = document.getElementById('emoji-bar');
+            const countSpan = document.getElementById('online-count');
+            const userList = document.getElementById('online-users-list');
+
+            countSpan.innerText = data.count;
+            userList.innerHTML = data.users.map(u => `<li style="margin-bottom: 8px;">● ${u}</li>`).join('');
+
+            if (data.allowed) {
+                statusMsg.innerText = "Club is Active! ✅";
+                statusMsg.style.color = "#4ecca3";
+                inputArea.style.display = "flex";
+                emojiBar.style.display = "flex";
+            } else {
+                statusMsg.innerText = "Waiting for at least 2 members online...";
+                statusMsg.style.color = "#ff4d4d";
+                inputArea.style.display = "none";
+                emojiBar.style.display = "none";
+            }
         });
 
+        // 3. Message Handling
         function sendMessage() {
             const input = document.getElementById('chat-input');
             const msg = input.value;
             if (msg) {
-                // Send to the whole room
-                socket.emit('club-message', { 
-                    groupId: groupId, 
-                    message: msg, 
-                    fromName: user.username 
-                });
+                socket.emit('club-message', { groupId, message: msg, fromName: user.username });
                 displayMessage("Me", msg);
                 input.value = "";
             }
         }
 
+        socket.on('new-club-message', (data) => {
+            displayMessage(data.fromName, data.message);
+        });
+
         function displayMessage(name, text) {
             const history = document.getElementById('message-history');
             const div = document.createElement('div');
             div.style.marginBottom = "10px";
-            div.innerHTML = `<strong style="color:#4ecca3">${name}:</strong> ${text}`;
+            div.innerHTML = `<strong style="color: #4ecca3;">${name}:</strong> ${text}`;
             history.appendChild(div);
             history.scrollTop = history.scrollHeight;
+        }
+
+        function addEmoji(emoji) {
+            document.getElementById('chat-input').value += emoji;
         }
 
         document.addEventListener("keypress", (e) => { if(e.key === "Enter") sendMessage(); });
