@@ -220,10 +220,67 @@ app.post('/admin/reset-all-data', async (req, res) => {
         res.status(500).json({ error: "Failed to reset data." });
     }
 });
+// --- NEW CLUB LOGIC IN SERVER.JS ---
+
+// A map to keep track of who is in which club room
+// Format: { "room-1": [{username: "Ben", socketId: "..."}, ...], "room-2": [] }
+let clubRooms = {};
+
+io.on('connection', (socket) => {
+    
+    socket.on('join-club', (data) => {
+        const { groupId, username } = data;
+        const roomName = `room-${groupId}`;
+
+        // 1. Initialize room if it doesn't exist
+        if (!clubRooms[roomName]) clubRooms[roomName] = [];
+
+        // 2. Check if the user is already in the list (prevents duplicates on refresh)
+        const isAlreadyIn = clubRooms[roomName].find(u => u.username === username);
+        if (!isAlreadyIn) {
+            clubRooms[roomName].push({ username, socketId: socket.id });
+        }
+
+        // 3. ENFORCE 2-PERSON RULE: 
+        // We only actually join the soket.io room if 2+ people are present in our tracking list
+        const onlineCount = clubRooms[roomName].length;
+        
+        if (onlineCount < 2) {
+            // Tell the user they are waiting
+            socket.emit('club-status', { 
+                allowed: false, 
+                message: "Waiting for at least one more member to go online...",
+                count: onlineCount
+            });
+        } else {
+            socket.join(roomName);
+            // Tell everyone in the club the room is active and update the list
+            io.to(roomName).emit('club-status', { 
+                allowed: true, 
+                count: onlineCount,
+                users: clubRooms[roomName].map(u => u.username)
+            });
+        }
+    });
+
+    // Handle Disconnects to clean up the club lists
+    socket.on('disconnect', () => {
+        for (const room in clubRooms) {
+            clubRooms[room] = clubRooms[room].filter(u => u.socketId !== socket.id);
+            // Notify remaining users of the new count
+            io.to(room).emit('club-status', { 
+                count: clubRooms[room].length,
+                users: clubRooms[room].map(u => u.username)
+            });
+        }
+    });
+});
+
 
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
 
