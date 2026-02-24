@@ -277,21 +277,30 @@ io.on('connection', (socket) => {
 
     // Handle Disconnects to clean up the club lists
     socket.on('disconnect', () => {
-        for (const room in clubRooms) {
-            clubRooms[room] = clubRooms[room].filter(u => u.socketId !== socket.id);
-            // Notify remaining users of the new count
-            io.to(room).emit('club-status', { 
-                count: clubRooms[room].length,
-                users: clubRooms[room].map(u => u.username)
-            });
+    // 1. Clean up Main Online List (The Dots)
+    for (let email in onlineUsers) {
+        if (onlineUsers[email] === socket.id) {
+            delete onlineUsers[email];
+            break;
         }
-    });
+    }
+    io.emit('update-online-list', Object.keys(onlineUsers));
+
+    // 2. Clean up Club Rooms
+    for (const room in clubRooms) {
+        clubRooms[room] = clubRooms[room].filter(u => u.socketId !== socket.id);
+        io.to(room).emit('club-status', { 
+            count: clubRooms[room].length,
+            users: clubRooms[room].map(u => u.username)
+        });
+    }
 });
 
 
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
 
