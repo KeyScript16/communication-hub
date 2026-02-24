@@ -251,13 +251,11 @@
         window.location.href = `chat.html?with=${d.fromEmail}`;
     }
 });
-        socket.on('chat-response', (d) => {
-    // This runs on the SENDER'S side
+       // Add this to your dashboard.html script
+socket.on('start-chat-confirmed', (d) => {
     if (d.accepted) {
-        // Move the sender to the chat room
+        // Use d.fromEmail because the server 'data' contains the person who accepted
         window.location.href = `chat.html?with=${d.fromEmail}`;
-    } else {
-        alert("Chat request was declined.");
     }
 });
 
@@ -269,5 +267,6 @@
     </script>
 </body>
 </html>
+
 
 
