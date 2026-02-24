@@ -153,59 +153,62 @@ app.post('/accept-group', async (req, res) => {
 
 
 // 5. SOCKET.IO LOGIC
+// --- CONSOLIDATED SOCKET.IO LOGIC ---
 const io = new Server(server, { cors: { origin: "*" } });
 let onlineUsers = {}; 
+let clubRooms = {};
 
-// FIXED: Added the missing connection block
 io.on('connection', (socket) => {
     
+    // 1. Online Status Logic
     socket.on('go-online', (data) => {
-    const email = (typeof data === 'object') ? data.email : data;
-    if (email) {
-        // FORCE LOWERCASE HERE
-        const cleanEmail = email.toLowerCase().trim(); 
-        onlineUsers[cleanEmail] = socket.id; 
-        io.emit('update-online-list', Object.keys(onlineUsers));
-    }
-});
+        const email = (typeof data === 'object') ? data.email : data;
+        if (email) {
+            const cleanEmail = email.toLowerCase().trim(); 
+            onlineUsers[cleanEmail] = socket.id; 
+            io.emit('update-online-list', Object.keys(onlineUsers));
+        }
+    });
 
-
+    // 2. Private Messaging & Chat Requests
     socket.on('private-message', (data) => {
         const targetSocketId = onlineUsers[data.to];
-        if (targetSocketId) {
-            io.to(targetSocketId).emit('new-message', data);
-        }
-    });
-
-    socket.on('typing', (data) => {
-        const targetSocketId = onlineUsers[data.to];
-        if (targetSocketId) {
-            io.to(targetSocketId).emit('friend-typing', data);
-        }
-    });
-
-    socket.on('leave-chat', (friendEmail) => {
-        const targetSocketId = onlineUsers[friendEmail];
-        if (targetSocketId) {
-            io.to(targetSocketId).emit('chat-ended-by-friend');
-        }
+        if (targetSocketId) io.to(targetSocketId).emit('new-message', data);
     });
 
     socket.on('request-chat', (data) => {
         const targetSocketId = onlineUsers[data.to];
-        if (targetSocketId) {
-            io.to(targetSocketId).emit('chat-requested', data);
-        }
+        if (targetSocketId) io.to(targetSocketId).emit('chat-requested', data);
     });
 
     socket.on('chat-response', (data) => {
         const requesterSocketId = onlineUsers[data.to];
-        if (requesterSocketId) {
-            io.to(requesterSocketId).emit('start-chat-confirmed', data);
+        if (requesterSocketId) io.to(requesterSocketId).emit('start-chat-confirmed', data);
+    });
+
+    // 3. Club / Group Logic
+    socket.on('join-club', (data) => {
+        const { groupId, username } = data;
+        const roomName = `room-${groupId}`;
+
+        if (!clubRooms[roomName]) clubRooms[roomName] = [];
+        const isAlreadyIn = clubRooms[roomName].find(u => u.username === username);
+        if (!isAlreadyIn) {
+            clubRooms[roomName].push({ username, socketId: socket.id });
+        }
+
+        const onlineCount = clubRooms[roomName].length;
+        if (onlineCount < 2) {
+            socket.emit('club-status', { allowed: false, message: "Waiting for members...", count: onlineCount });
+        } else {
+            socket.join(roomName);
+            io.to(roomName).emit('club-status', { allowed: true, count: onlineCount, users: clubRooms[roomName].map(u => u.username) });
         }
     });
 
+    // 4. Cleanup on Disconnect
     socket.on('disconnect', () => {
+        // Remove from Online List
         for (let email in onlineUsers) {
             if (onlineUsers[email] === socket.id) {
                 delete onlineUsers[email];
@@ -213,97 +216,27 @@ io.on('connection', (socket) => {
             }
         }
         io.emit('update-online-list', Object.keys(onlineUsers));
+
+        // Remove from Club Rooms
+        for (const room in clubRooms) {
+            clubRooms[room] = clubRooms[room].filter(u => u.socketId !== socket.id);
+            io.to(room).emit('club-status', { count: clubRooms[room].length, users: clubRooms[room].map(u => u.username) });
+        }
     });
 });
+
+// Admin Route (Outside the socket block)
 app.post('/admin/reset-all-data', async (req, res) => {
     const { adminPassword } = req.body;
-    const SECRET_KEY = "you must know what you're doing in order to delete everything."; // <--- CHANGE THIS!
-
-    if (adminPassword !== SECRET_KEY) {
-        return res.status(403).json({ error: "Access Denied: Invalid Admin Password" });
+    if (adminPassword !== "you must know what you're doing in order to delete everything.") {
+        return res.status(403).json({ error: "Access Denied" });
     }
-
     try {
-        // This clears groups, resets IDs, and clears the user list (site_data)
         await pool.query('TRUNCATE TABLE chat_groups, site_data RESTART IDENTITY CASCADE');
-        res.json({ status: "System Purged! All data wiped and IDs reset." });
-    } catch (err) {
-        console.error("Reset Error:", err);
-        res.status(500).json({ error: "Failed to reset data." });
-    }
+        res.json({ status: "System Purged!" });
+    } catch (err) { res.status(500).json({ error: "Reset Failed" }); }
 });
-// --- NEW CLUB LOGIC IN SERVER.JS ---
-
-// A map to keep track of who is in which club room
-// Format: { "room-1": [{username: "Ben", socketId: "..."}, ...], "room-2": [] }
-let clubRooms = {};
-
-io.on('connection', (socket) => {
-    
-    socket.on('join-club', (data) => {
-        const { groupId, username } = data;
-        const roomName = `room-${groupId}`;
-
-        // 1. Initialize room if it doesn't exist
-        if (!clubRooms[roomName]) clubRooms[roomName] = [];
-
-        // 2. Check if the user is already in the list (prevents duplicates on refresh)
-        const isAlreadyIn = clubRooms[roomName].find(u => u.username === username);
-        if (!isAlreadyIn) {
-            clubRooms[roomName].push({ username, socketId: socket.id });
-        }
-
-        // 3. ENFORCE 2-PERSON RULE: 
-        // We only actually join the soket.io room if 2+ people are present in our tracking list
-        const onlineCount = clubRooms[roomName].length;
-        
-        if (onlineCount < 2) {
-            // Tell the user they are waiting
-            socket.emit('club-status', { 
-                allowed: false, 
-                message: "Waiting for at least one more member to go online...",
-                count: onlineCount
-            });
-        } else {
-            socket.join(roomName);
-            // Tell everyone in the club the room is active and update the list
-            io.to(roomName).emit('club-status', { 
-                allowed: true, 
-                count: onlineCount,
-                users: clubRooms[roomName].map(u => u.username)
-            });
-        }
-    });
-
-    // Handle Disconnects to clean up the club lists
-    socket.on('disconnect', () => {
-    // 1. Clean up Main Online List (The Dots)
-    for (let email in onlineUsers) {
-        if (onlineUsers[email] === socket.id) {
-            delete onlineUsers[email];
-            break;
-        }
-    }
-    io.emit('update-online-list', Object.keys(onlineUsers));
-
-    // 2. Clean up Club Rooms
-    for (const room in clubRooms) {
-        clubRooms[room] = clubRooms[room].filter(u => u.socketId !== socket.id);
-        io.to(room).emit('club-status', { 
-            count: clubRooms[room].length,
-            users: clubRooms[room].map(u => u.username)
-        });
-    }
-});
-
-
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-
-
-
-
-
 
