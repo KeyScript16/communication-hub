@@ -43,7 +43,7 @@ initDB();
 // 2. MIDDLEWARE
 app.use(cors()); 
 app.use(express.json());
-//app.use(express.static(path.join(__dirname))); 
+app.use(express.static(path.join(__dirname))); 
 
 async function readDB() {
     try {
@@ -239,5 +239,6 @@ app.post('/admin/reset-all-data', async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
