@@ -238,12 +238,30 @@
             socket.emit('request-chat', { to: f, fromName: user.username, fromEmail: user.email });
         }
 
-        socket.on('chat-requested', (d) => {
-            if(confirm(d.fromName + " wants to chat!")) {
-                socket.emit('chat-response', { to: d.fromEmail, fromEmail: user.email, accepted: true });
-                window.location.href = `chat.html?with=${d.fromEmail}`;
-            }
+       socket.on('chat-requested', (d) => {
+    // This runs on the RECIPIENT'S side
+    if(confirm(d.fromName + " wants to chat!")) {
+        // We send a response back to the SENDER (d.fromEmail)
+        socket.emit('chat-response', { 
+            to: d.fromEmail, 
+            fromEmail: user.email, 
+            accepted: true 
         });
+        // Move recipient to chat
+        window.location.href = `chat.html?with=${d.fromEmail}`;
+    }
+});
+        socket.on('chat-response', (d) => {
+    // This runs on the SENDER'S side
+    if (d.accepted) {
+        // Move the sender to the chat room
+        window.location.href = `chat.html?with=${d.fromEmail}`;
+    } else {
+        alert("Chat request was declined.");
+    }
+});
+
+
 
         function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
 
@@ -251,4 +269,5 @@
     </script>
 </body>
 </html>
+
 
