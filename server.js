@@ -60,10 +60,20 @@ async function readDB() {
 
 async function writeDB(data) {
     try {
-        await pool.query('DELETE FROM site_data'); 
-        await pool.query('INSERT INTO site_data (content) VALUES ($1)', [JSON.stringify(data)]);
-    } catch (err) { console.error("Write Error:", err); }
+        // This is an "UPSERT": It updates the data if ID 1 exists, 
+        // or creates it if it doesn't. Much safer than DELETE + INSERT.
+        await pool.query(`
+            INSERT INTO site_data (id, content) 
+            VALUES (1, $1) 
+            ON CONFLICT (id) 
+            DO UPDATE SET content = EXCLUDED.content`, 
+            [JSON.stringify(data)]
+        );
+    } catch (err) { 
+        console.error("Database Write Error:", err); 
+    }
 }
+
 
 // 3. PAGE ROUTES
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
@@ -280,6 +290,7 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
 
