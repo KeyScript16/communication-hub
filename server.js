@@ -160,13 +160,15 @@ let onlineUsers = {};
 io.on('connection', (socket) => {
     
     socket.on('go-online', (data) => {
-        // Safety check for object vs string
-        const email = (typeof data === 'object') ? data.email : data;
-        if (email) {
-            onlineUsers[email] = socket.id; 
-            io.emit('update-online-list', Object.keys(onlineUsers));
-        }
-    });
+    const email = (typeof data === 'object') ? data.email : data;
+    if (email) {
+        // FORCE LOWERCASE HERE
+        const cleanEmail = email.toLowerCase().trim(); 
+        onlineUsers[cleanEmail] = socket.id; 
+        io.emit('update-online-list', Object.keys(onlineUsers));
+    }
+});
+
 
     socket.on('private-message', (data) => {
         const targetSocketId = onlineUsers[data.to];
@@ -290,6 +292,7 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
 
