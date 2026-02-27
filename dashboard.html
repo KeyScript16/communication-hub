@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
-    <!-- Replace your old socket script with these two -->
-<!-- DELETE the cdn.socket.io line and PASTE this one -->
-<script src="https://cdn.jsdelivr.net" crossorigin="anonymous"></script>
+    <!-- FIXED: Correct Socket.io CDN link -->
+    <script src="https://cdn.socket.io"></script>
     <title>Dashboard</title>
     <link rel="icon" type="image/png" href="favicon-32x32.png">
 </head>
 <body>
-    <div id="main-content" style="width: 450px;">
+    <div id="main-content" style="width: 450px; margin: auto; text-align: center; color: white; font-family: sans-serif;">
         <h1>Dashboard</h1>
         <p>Welcome, <span id="display-name">Loading...</span></p>
 
@@ -33,23 +32,30 @@
                 </div>
             </div>
 
-            <button onclick="addFriend()" style="margin-top: 20px; background: #4ecca3; color: #1a1a2e; width: 100%;">Add New Friend</button>
-            <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; background: rgba(78, 204, 163, 0.2); border: 1px solid #4ecca3; color: #4ecca3; width: 100%;">Create New Group</button>
+            <button onclick="addFriend()" style="margin-top: 20px; background: #4ecca3; color: #1a1a2e; width: 100%; padding: 10px; cursor: pointer;">Add New Friend</button>
+            <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; background: rgba(78, 204, 163, 0.2); border: 1px solid #4ecca3; color: #4ecca3; width: 100%; padding: 10px; cursor: pointer;">Create New Group</button>
         </div>
 
-        <button onclick="logout()" style="margin-top: 20px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); width: 100%;">Logout</button>
+        <button onclick="logout()" style="margin-top: 20px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); width: 100%; padding: 10px; cursor: pointer;">Logout</button>
     </div>
 
     <script>
         const BASE_URL = 'https://crescendo-chat.onrender.com';
         const userData = sessionStorage.getItem("currentUser");
-        if (!userData) window.location.href = 'index.html';
+        
+        // Redirect if no user session
+        if (!userData) {
+            window.location.href = 'index.html';
+        }
+        
         const user = JSON.parse(userData);
-
+        // Initialize socket - global scope
         const socket = io(BASE_URL);
 
         async function init() {
+            // FIXED: Set display name FIRST so "Loading..." vanishes immediately
             document.getElementById('display-name').innerText = user.username;
+            
             const adminBtn = document.getElementById('admin-reset-btn');
             const userUI = document.getElementById('user-ui');
 
@@ -60,23 +66,25 @@
                 adminBtn.style.display = "none";
                 userUI.style.display = "block";
                 try {
+                    // Wake up server and join socket
                     await fetch(`${BASE_URL}/get-data`);
                     socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username }); 
                     loadMyGroups();
-                } catch(e) { console.log("Waking up..."); }
+                } catch(e) { 
+                    console.log("Server waking up...", e); 
+                }
             }
         }
 
         // --- FRIENDS LOGIC ---
         socket.on('update-online-list', async (onlineEmails) => {
             const listDiv = document.getElementById('friends-list');
-            listDiv.innerHTML = ""; 
-
             const response = await fetch(`${BASE_URL}/get-data`);
             const allUsers = await response.json();
             const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
 
             if (!me) return;
+            listDiv.innerHTML = ""; // Clear for refresh
 
             // Render Pending Friend Requests
             if (me.requests && me.requests.length > 0) {
@@ -106,7 +114,7 @@
                     const row = document.createElement('div');
                     row.style.margin = "10px 0";
                     row.innerHTML = `<span>${displayName} ${online ? '<span style="color:#4ecca3">●</span>' : '○'}</span> 
-                                     ${online ? `<button onclick="startChat('${friendEmail}')" style="margin-left:10px;">Chat</button>` : ''}`;
+                                     ${online ? `<button onclick="startChat('${friendEmail}')" style="margin-left:10px; cursor:pointer;">Chat</button>` : ''}`;
                     listDiv.appendChild(row);
                 });
             }
@@ -148,6 +156,7 @@
                         if (!sender.friends.includes(user.email.toLowerCase())) sender.friends.push(user.email.toLowerCase());
                     }
                 }
+                // FIXED: Actually saving the accepted friend back to server
                 await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
                 socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username });
             }
@@ -180,11 +189,13 @@
                 if (pending && pending.length > 0) {
                     pendingSection.style.display = "block";
                     pendingDiv.innerHTML = pending.map(g => `
-                        <div style="background: rgba(255,255,255,0.1); padding: 10px; margin-bottom: 5px; display: flex; justify-content: space-between;">
+                        <div style="background: rgba(255,255,255,0.1); padding: 10px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
                             <strong>${g.group_name}</strong>
-                            <button onclick="acceptInvite(${g.id})">Join</button>
+                            <button onclick="acceptInvite(${g.id})" style="cursor:pointer;">Join</button>
                         </div>`).join('');
-                } else pendingSection.style.display = "none";
+                } else {
+                    pendingSection.style.display = "none";
+                }
 
                 const activeDiv = document.getElementById('active-list');
                 activeDiv.innerHTML = (joined && joined.length > 0) ? joined.map(g => `<div style="border: 1px solid #4ecca3; padding: 10px; margin-bottom: 5px;">${g.group_name}</div>`).join('') : "No clubs joined yet.";
@@ -203,10 +214,9 @@
         }
 
         function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
+        
+        // Execute initialization
         init();
     </script>
 </body>
 </html>
-
-
-
