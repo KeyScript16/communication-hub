@@ -4,13 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
-    <!-- FIXED: Correct Socket.io CDN link -->
-    <script src="https://cdn.socket.io"></script>
+    
+    <!-- FIXED: Direct file link to Socket.io (avoids MIME error) -->
+    <script src="https://cdnjs.cloudflare.com"></script>
+
+    <!-- FIXED: Correct Google Fonts syntax -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com" rel="stylesheet">
+
     <title>Dashboard</title>
     <link rel="icon" type="image/png" href="favicon-32x32.png">
 </head>
 <body>
-    <div id="main-content" style="width: 450px; margin: auto; text-align: center; color: white; font-family: sans-serif;">
+    <div id="main-content" style="width: 450px; margin: auto; text-align: center; color: white; font-family: 'Inter', sans-serif;">
         <h1>Dashboard</h1>
         <p>Welcome, <span id="display-name">Loading...</span></p>
 
@@ -32,30 +39,36 @@
                 </div>
             </div>
 
-            <button onclick="addFriend()" style="margin-top: 20px; background: #4ecca3; color: #1a1a2e; width: 100%; padding: 10px; cursor: pointer;">Add New Friend</button>
-            <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; background: rgba(78, 204, 163, 0.2); border: 1px solid #4ecca3; color: #4ecca3; width: 100%; padding: 10px; cursor: pointer;">Create New Group</button>
+            <button onclick="addFriend()" style="margin-top: 20px; background: #4ecca3; color: #1a1a2e; width: 100%; padding: 10px; cursor: pointer; border: none; border-radius: 5px;">Add New Friend</button>
+            <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; background: rgba(78, 204, 163, 0.2); border: 1px solid #4ecca3; color: #4ecca3; width: 100%; padding: 10px; cursor: pointer; border-radius: 5px;">Create New Group</button>
         </div>
 
-        <button onclick="logout()" style="margin-top: 20px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); width: 100%; padding: 10px; cursor: pointer;">Logout</button>
+        <button onclick="logout()" style="margin-top: 20px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); width: 100%; padding: 10px; cursor: pointer; border-radius: 5px;">Logout</button>
     </div>
 
     <script>
         const BASE_URL = 'https://crescendo-chat.onrender.com';
         const userData = sessionStorage.getItem("currentUser");
         
-        // Redirect if no user session
         if (!userData) {
             window.location.href = 'index.html';
         }
         
         const user = JSON.parse(userData);
-        // Initialize socket - global scope
-        const socket = io(BASE_URL);
+
+        // --- STEP 1: FORCE NAME TO LOAD IMMEDIATELY ---
+        // This ensures "Loading..." disappears even if the server is slow
+        document.getElementById('display-name').innerText = user.username;
+
+        // --- STEP 2: INITIALIZE SOCKET ---
+        let socket;
+        try {
+            socket = io(BASE_URL);
+        } catch (e) {
+            console.error("Socket initialization failed. Check CDN link.", e);
+        }
 
         async function init() {
-            // FIXED: Set display name FIRST so "Loading..." vanishes immediately
-            document.getElementById('display-name').innerText = user.username;
-            
             const adminBtn = document.getElementById('admin-reset-btn');
             const userUI = document.getElementById('user-ui');
 
@@ -66,10 +79,11 @@
                 adminBtn.style.display = "none";
                 userUI.style.display = "block";
                 try {
-                    // Wake up server and join socket
                     await fetch(`${BASE_URL}/get-data`);
-                    socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username }); 
-                    loadMyGroups();
+                    if (socket) {
+                        socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username }); 
+                        loadMyGroups();
+                    }
                 } catch(e) { 
                     console.log("Server waking up...", e); 
                 }
@@ -77,48 +91,59 @@
         }
 
         // --- FRIENDS LOGIC ---
-        socket.on('update-online-list', async (onlineEmails) => {
-            const listDiv = document.getElementById('friends-list');
-            const response = await fetch(`${BASE_URL}/get-data`);
-            const allUsers = await response.json();
-            const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+        if (socket) {
+            socket.on('update-online-list', async (onlineEmails) => {
+                const listDiv = document.getElementById('friends-list');
+                const response = await fetch(`${BASE_URL}/get-data`);
+                const allUsers = await response.json();
+                const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
 
-            if (!me) return;
-            listDiv.innerHTML = ""; // Clear for refresh
+                if (!me) return;
+                listDiv.innerHTML = ""; 
 
-            // Render Pending Friend Requests
-            if (me.requests && me.requests.length > 0) {
-                listDiv.innerHTML += "<h3 style='color: #4ecca3;'>Pending Requests:</h3>";
-                me.requests.forEach(senderEmail => {
-                    const senderData = allUsers.find(u => u.email.toLowerCase() === senderEmail.toLowerCase());
-                    const displayName = senderData ? senderData.username : senderEmail;
-                    const reqRow = document.createElement('div');
-                    reqRow.style.cssText = "background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px; margin-bottom: 10px;";
-                    reqRow.innerHTML = `
-                        <span>${displayName}</span>
-                        <div style="margin-top: 5px;">
-                            <button onclick="handleRequest('${senderEmail}', 'accept')" style="background: #4ecca3; color: #1a1a2e; border:none; padding:5px; cursor:pointer;">Accept</button>
-                            <button onclick="handleRequest('${senderEmail}', 'decline')" style="background: #ff4d4d; color:white; border:none; padding:5px; margin-left:5px; cursor:pointer;">Decline</button>
-                        </div>`;
-                    listDiv.appendChild(reqRow);
-                });
-            }
+                if (me.requests && me.requests.length > 0) {
+                    listDiv.innerHTML += "<h3 style='color: #4ecca3;'>Pending Requests:</h3>";
+                    me.requests.forEach(senderEmail => {
+                        const senderData = allUsers.find(u => u.email.toLowerCase() === senderEmail.toLowerCase());
+                        const displayName = senderData ? senderData.username : senderEmail;
+                        const reqRow = document.createElement('div');
+                        reqRow.style.cssText = "background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px; margin-bottom: 10px;";
+                        reqRow.innerHTML = `
+                            <span>${displayName}</span>
+                            <div style="margin-top: 5px;">
+                                <button onclick="handleRequest('${senderEmail}', 'accept')" style="background: #4ecca3; color: #1a1a2e; border:none; padding:5px; cursor:pointer;">Accept</button>
+                                <button onclick="handleRequest('${senderEmail}', 'decline')" style="background: #ff4d4d; color:white; border:none; padding:5px; margin-left:5px; cursor:pointer;">Decline</button>
+                            </div>`;
+                        listDiv.appendChild(reqRow);
+                    });
+                }
 
-            // Render Friends List
-            listDiv.innerHTML += "<h3>Friends:</h3>"; 
-            if (me.friends) {
-                me.friends.forEach(friendEmail => {
-                    const online = onlineEmails.map(e => e.toLowerCase()).includes(friendEmail.toLowerCase());
-                    const friendData = allUsers.find(u => u.email.toLowerCase() === friendEmail.toLowerCase());
-                    const displayName = friendData ? friendData.username : friendEmail;
-                    const row = document.createElement('div');
-                    row.style.margin = "10px 0";
-                    row.innerHTML = `<span>${displayName} ${online ? '<span style="color:#4ecca3">●</span>' : '○'}</span> 
-                                     ${online ? `<button onclick="startChat('${friendEmail}')" style="margin-left:10px; cursor:pointer;">Chat</button>` : ''}`;
-                    listDiv.appendChild(row);
-                });
-            }
-        });
+                listDiv.innerHTML += "<h3>Friends:</h3>"; 
+                if (me.friends) {
+                    me.friends.forEach(friendEmail => {
+                        const online = onlineEmails.map(e => e.toLowerCase()).includes(friendEmail.toLowerCase());
+                        const friendData = allUsers.find(u => u.email.toLowerCase() === friendEmail.toLowerCase());
+                        const displayName = friendData ? friendData.username : friendEmail;
+                        const row = document.createElement('div');
+                        row.style.margin = "10px 0";
+                        row.innerHTML = `<span>${displayName} ${online ? '<span style="color:#4ecca3">●</span>' : '○'}</span> 
+                                         ${online ? `<button onclick="startChat('${friendEmail}')" style="margin-left:10px; cursor:pointer;">Chat</button>` : ''}`;
+                        listDiv.appendChild(row);
+                    });
+                }
+            });
+
+            socket.on('chat-requested', (d) => {
+                if(confirm(d.fromName + " wants to chat!")) {
+                    socket.emit('chat-response', { to: d.fromEmail.toLowerCase(), fromEmail: user.email.toLowerCase(), accepted: true });
+                    window.location.href = `chat.html?with=${d.fromEmail}`;
+                }
+            });
+
+            socket.on('start-chat-confirmed', (d) => {
+                if (d.accepted) window.location.href = `chat.html?with=${d.fromEmail}`;
+            });
+        }
 
         async function addFriend() {
             let target = prompt("Friend's email:");
@@ -156,29 +181,15 @@
                         if (!sender.friends.includes(user.email.toLowerCase())) sender.friends.push(user.email.toLowerCase());
                     }
                 }
-                // FIXED: Actually saving the accepted friend back to server
                 await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
-                socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username });
+                if (socket) socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username });
             }
         }
 
-        // --- CHAT LOGIC ---
         function startChat(f) {
-            socket.emit('request-chat', { to: f.toLowerCase(), fromName: user.username, fromEmail: user.email.toLowerCase() });
+            if (socket) socket.emit('request-chat', { to: f.toLowerCase(), fromName: user.username, fromEmail: user.email.toLowerCase() });
         }
 
-        socket.on('chat-requested', (d) => {
-            if(confirm(d.fromName + " wants to chat!")) {
-                socket.emit('chat-response', { to: d.fromEmail.toLowerCase(), fromEmail: user.email.toLowerCase(), accepted: true });
-                window.location.href = `chat.html?with=${d.fromEmail}`;
-            }
-        });
-
-        socket.on('start-chat-confirmed', (d) => {
-            if (d.accepted) window.location.href = `chat.html?with=${d.fromEmail}`;
-        });
-
-        // --- GROUP/SYSTEM LOGIC ---
         async function loadMyGroups() {
             try {
                 const response = await fetch(`${BASE_URL}/get-my-groups?email=${user.email.toLowerCase()}`);
@@ -215,7 +226,6 @@
 
         function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
         
-        // Execute initialization
         init();
     </script>
 </body>
