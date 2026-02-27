@@ -4,228 +4,71 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
-    
-    <!-- FIXED: Direct file link to Socket.io (avoids MIME error) -->
+    <!-- FIXED: Rock-solid Socket.io link from CDNJS -->
     <script src="https://cdnjs.cloudflare.com"></script>
-
-    <!-- FIXED: Correct Google Fonts syntax -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com" rel="stylesheet">
-
     <title>Dashboard</title>
-    <link rel="icon" type="image/png" href="favicon-32x32.png">
 </head>
-<body>
-    <div id="main-content" style="width: 450px; margin: auto; text-align: center; color: white; font-family: 'Inter', sans-serif;">
+<body style="background: #1a1a2e; color: white; font-family: sans-serif; text-align: center;">
+    <div id="main-content" style="width: 450px; margin: 50px auto;">
         <h1>Dashboard</h1>
+        <!-- This will be updated INSTANTLY by the script below -->
         <p>Welcome, <span id="display-name">Loading...</span></p>
-
-        <button id="admin-reset-btn" onclick="securePurge()" style="display:none; margin-top: 20px; background: #ff4d4d; color: white; border: 2px solid white; padding: 15px; width: 100%; font-weight: bold; cursor: pointer;">
-            🔥 ADMIN: RESET ENTIRE SYSTEM
-        </button>
 
         <div id="user-ui">
             <div id="friends-list" style="margin-top: 20px; text-align: left;"></div>
-            
-            <div id="clubs-container" style="max-width: 500px; margin: 20px auto; color: white;">
-                <div id="pending-section" style="display:none; margin-bottom: 30px;">
-                    <h3 style="color: #4ecca3;">Club Invites 📩</h3>
-                    <div id="pending-list"></div>
-                </div>
-                <div id="active-section">
-                    <h3 style="color: #4ecca3;">Your Clubs 🚀</h3>
-                    <div id="active-list">Loading your clubs...</div>
-                </div>
-            </div>
-
-            <button onclick="addFriend()" style="margin-top: 20px; background: #4ecca3; color: #1a1a2e; width: 100%; padding: 10px; cursor: pointer; border: none; border-radius: 5px;">Add New Friend</button>
-            <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; background: rgba(78, 204, 163, 0.2); border: 1px solid #4ecca3; color: #4ecca3; width: 100%; padding: 10px; cursor: pointer; border-radius: 5px;">Create New Group</button>
+            <div id="active-list" style="margin-top: 10px; color: #4ecca3;">Waking up server...</div>
+            <button onclick="addFriend()" style="margin-top: 20px; width: 100%; padding: 10px; cursor: pointer;">Add Friend</button>
         </div>
-
-        <button onclick="logout()" style="margin-top: 20px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); width: 100%; padding: 10px; cursor: pointer; border-radius: 5px;">Logout</button>
+        <button onclick="sessionStorage.clear(); window.location.href='index.html'" style="margin-top: 20px; width: 100%; opacity: 0.6;">Logout</button>
     </div>
 
     <script>
         const BASE_URL = 'https://crescendo-chat.onrender.com';
         const userData = sessionStorage.getItem("currentUser");
-        
-        if (!userData) {
-            window.location.href = 'index.html';
-        }
-        
+        if (!userData) window.location.href = 'index.html';
         const user = JSON.parse(userData);
 
-        // --- STEP 1: FORCE NAME TO LOAD IMMEDIATELY ---
-        // This ensures "Loading..." disappears even if the server is slow
+        // --- STEP 1: FIX THE "LOADING..." BUG INSTANTLY ---
         document.getElementById('display-name').innerText = user.username;
 
-        // --- STEP 2: INITIALIZE SOCKET ---
+        // --- STEP 2: TRY TO CONNECT (IF IT FAILS, THE NAME STAYS) ---
         let socket;
         try {
             socket = io(BASE_URL);
-        } catch (e) {
-            console.error("Socket initialization failed. Check CDN link.", e);
-        }
+        } catch (e) { console.error("Socket failed to load."); }
 
         async function init() {
-            const adminBtn = document.getElementById('admin-reset-btn');
-            const userUI = document.getElementById('user-ui');
-
-            if (user.isAdmin === true) {
-                adminBtn.style.display = "block";
-                userUI.style.display = "none";
-            } else {
-                adminBtn.style.display = "none";
-                userUI.style.display = "block";
-                try {
-                    await fetch(`${BASE_URL}/get-data`);
-                    if (socket) {
-                        socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username }); 
-                        loadMyGroups();
-                    }
-                } catch(e) { 
-                    console.log("Server waking up...", e); 
+            try {
+                // Wake up Render (Free tier takes a while)
+                await fetch(`${BASE_URL}/get-data`);
+                if (socket) {
+                    socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username });
+                    document.getElementById('active-list').innerText = "Server Online 🚀";
                 }
+            } catch (e) { 
+                document.getElementById('active-list').innerText = "Server waking up... try refreshing in 30s.";
             }
         }
 
-        // --- FRIENDS LOGIC ---
+        // --- STEP 3: HANDLE FRIENDS (IF SOCKET WORKS) ---
         if (socket) {
             socket.on('update-online-list', async (onlineEmails) => {
                 const listDiv = document.getElementById('friends-list');
-                const response = await fetch(`${BASE_URL}/get-data`);
-                const allUsers = await response.json();
-                const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+                try {
+                    const res = await fetch(`${BASE_URL}/get-data`);
+                    const allUsers = await res.json();
+                    const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+                    if (!me || !me.friends) return;
 
-                if (!me) return;
-                listDiv.innerHTML = ""; 
-
-                if (me.requests && me.requests.length > 0) {
-                    listDiv.innerHTML += "<h3 style='color: #4ecca3;'>Pending Requests:</h3>";
-                    me.requests.forEach(senderEmail => {
-                        const senderData = allUsers.find(u => u.email.toLowerCase() === senderEmail.toLowerCase());
-                        const displayName = senderData ? senderData.username : senderEmail;
-                        const reqRow = document.createElement('div');
-                        reqRow.style.cssText = "background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px; margin-bottom: 10px;";
-                        reqRow.innerHTML = `
-                            <span>${displayName}</span>
-                            <div style="margin-top: 5px;">
-                                <button onclick="handleRequest('${senderEmail}', 'accept')" style="background: #4ecca3; color: #1a1a2e; border:none; padding:5px; cursor:pointer;">Accept</button>
-                                <button onclick="handleRequest('${senderEmail}', 'decline')" style="background: #ff4d4d; color:white; border:none; padding:5px; margin-left:5px; cursor:pointer;">Decline</button>
-                            </div>`;
-                        listDiv.appendChild(reqRow);
+                    listDiv.innerHTML = "<h3>Friends:</h3>";
+                    me.friends.forEach(fEmail => {
+                        const online = onlineEmails.map(e => e.toLowerCase()).includes(fEmail.toLowerCase());
+                        listDiv.innerHTML += `<div>${fEmail} ${online ? '●' : '○'}</div>`;
                     });
-                }
-
-                listDiv.innerHTML += "<h3>Friends:</h3>"; 
-                if (me.friends) {
-                    me.friends.forEach(friendEmail => {
-                        const online = onlineEmails.map(e => e.toLowerCase()).includes(friendEmail.toLowerCase());
-                        const friendData = allUsers.find(u => u.email.toLowerCase() === friendEmail.toLowerCase());
-                        const displayName = friendData ? friendData.username : friendEmail;
-                        const row = document.createElement('div');
-                        row.style.margin = "10px 0";
-                        row.innerHTML = `<span>${displayName} ${online ? '<span style="color:#4ecca3">●</span>' : '○'}</span> 
-                                         ${online ? `<button onclick="startChat('${friendEmail}')" style="margin-left:10px; cursor:pointer;">Chat</button>` : ''}`;
-                        listDiv.appendChild(row);
-                    });
-                }
-            });
-
-            socket.on('chat-requested', (d) => {
-                if(confirm(d.fromName + " wants to chat!")) {
-                    socket.emit('chat-response', { to: d.fromEmail.toLowerCase(), fromEmail: user.email.toLowerCase(), accepted: true });
-                    window.location.href = `chat.html?with=${d.fromEmail}`;
-                }
-            });
-
-            socket.on('start-chat-confirmed', (d) => {
-                if (d.accepted) window.location.href = `chat.html?with=${d.fromEmail}`;
+                } catch(err) { console.log("List update failed."); }
             });
         }
 
-        async function addFriend() {
-            let target = prompt("Friend's email:");
-            if (!target) return;
-            target = target.toLowerCase().trim();
-            if (target === user.email.toLowerCase()) return alert("Can't add yourself!");
-
-            const res = await fetch(`${BASE_URL}/get-data`);
-            let users = await res.json();
-            let friend = users.find(u => u.email.toLowerCase() === target);
-
-            if (friend) {
-                friend.requests = friend.requests || [];
-                if (!friend.requests.includes(user.email.toLowerCase())) {
-                    friend.requests.push(user.email.toLowerCase());
-                    await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
-                    alert("Request Sent!");
-                } else alert("Already pending!");
-            } else alert("User not found!");
-        }
-
-        async function handleRequest(senderEmail, action) {
-            const res = await fetch(`${BASE_URL}/get-data`);
-            let users = await res.json();
-            let me = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
-            let sender = users.find(u => u.email.toLowerCase() === senderEmail.toLowerCase());
-
-            if (me) {
-                me.requests = (me.requests || []).filter(e => e.toLowerCase() !== senderEmail.toLowerCase());
-                if (action === 'accept') {
-                    me.friends = me.friends || [];
-                    if (!me.friends.includes(senderEmail.toLowerCase())) me.friends.push(senderEmail.toLowerCase());
-                    if (sender) {
-                        sender.friends = sender.friends || [];
-                        if (!sender.friends.includes(user.email.toLowerCase())) sender.friends.push(user.email.toLowerCase());
-                    }
-                }
-                await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(users) });
-                if (socket) socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username });
-            }
-        }
-
-        function startChat(f) {
-            if (socket) socket.emit('request-chat', { to: f.toLowerCase(), fromName: user.username, fromEmail: user.email.toLowerCase() });
-        }
-
-        async function loadMyGroups() {
-            try {
-                const response = await fetch(`${BASE_URL}/get-my-groups?email=${user.email.toLowerCase()}`);
-                const { joined, pending } = await response.json();
-                const pendingDiv = document.getElementById('pending-list');
-                const pendingSection = document.getElementById('pending-section');
-                
-                if (pending && pending.length > 0) {
-                    pendingSection.style.display = "block";
-                    pendingDiv.innerHTML = pending.map(g => `
-                        <div style="background: rgba(255,255,255,0.1); padding: 10px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
-                            <strong>${g.group_name}</strong>
-                            <button onclick="acceptInvite(${g.id})" style="cursor:pointer;">Join</button>
-                        </div>`).join('');
-                } else {
-                    pendingSection.style.display = "none";
-                }
-
-                const activeDiv = document.getElementById('active-list');
-                activeDiv.innerHTML = (joined && joined.length > 0) ? joined.map(g => `<div style="border: 1px solid #4ecca3; padding: 10px; margin-bottom: 5px;">${g.group_name}</div>`).join('') : "No clubs joined yet.";
-            } catch (err) { console.error(err); }
-        }
-
-        async function acceptInvite(groupId) {
-            const res = await fetch(`${BASE_URL}/accept-group`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId, email: user.email.toLowerCase() }) });
-            if (res.ok) loadMyGroups();
-        }
-
-        async function securePurge() {
-            if (!confirm("Wipe everything?")) return;
-            const res = await fetch(`${BASE_URL}/admin/reset-all-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminPassword: "you must know what you're doing in order to delete everything." }) });
-            if (res.ok) { alert("Purged!"); logout(); }
-        }
-
-        function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
-        
         init();
     </script>
 </body>
