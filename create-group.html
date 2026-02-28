@@ -28,59 +28,54 @@
     </div>
 
     <script>
-        const BASE_URL = 'https://crescendo-chat.onrender.com';
-        const user = JSON.parse(sessionStorage.getItem("currentUser"));
+    const BASE_URL = 'https://crescendo-chat.onrender.com';
+    const user = JSON.parse(sessionStorage.getItem("currentUser") || "{}");
+    if (!user.email) window.location.href = 'index.html';
 
-        // 1. Load friends to show as checkboxes
-        async function loadFriends() {
-            const res = await fetch(`${BASE_URL}/get-data`);
-            const allUsers = await res.json();
-            const me = allUsers.find(u => u.email === user.email);
-            
-            const listDiv = document.getElementById('friends-checkbox-list');
-            listDiv.innerHTML = "";
-
-            if (me && me.friends && me.friends.length > 0) {
-                me.friends.forEach(fEmail => {
-                    const row = document.createElement('div');
-                    row.innerHTML = `
-                        <input type="checkbox" name="friend" value="${fEmail}" style="width:auto; margin-right:10px;">
-                        <span>${fEmail}</span>
-                    `;
-                    listDiv.appendChild(row);
-                });
-            } else {
-                listDiv.innerHTML = "No friends to invite yet.";
-            }
+    async function loadFriends() {
+        const res = await fetch(`${BASE_URL}/get-data`);
+        const allUsers = await res.json();
+        // FIXED: Using case-insensitive find
+        const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+        const listDiv = document.getElementById('friends-checkbox-list');
+        
+        if (me && me.friends && me.friends.length > 0) {
+            listDiv.innerHTML = me.friends.map(f => `
+                <div style="margin-bottom:5px;">
+                    <input type="checkbox" name="friend" value="${f}" style="width:auto; margin-right:10px;">
+                    <span>${f}</span>
+                </div>`).join('');
+        } else {
+            listDiv.innerHTML = "Add friends first to invite them!";
         }
+    }
 
-        // 2. The Logic to save the group
-        async function createGroup() {
-            const name = document.getElementById('group-name').value;
-            const desc = document.getElementById('group-desc').value;
-            const selectedFriends = Array.from(document.querySelectorAll('input[name="friend"]:checked')).map(cb => cb.value);
+    async function createGroup() {
+        const name = document.getElementById('group-name').value;
+        const desc = document.getElementById('group-desc').value;
+        const selected = Array.from(document.querySelectorAll('input[name="friend"]:checked')).map(cb => cb.value);
 
-            if (!name) return alert("Give your group a name!");
+        if (!name) return alert("Group name required!");
 
-            // Send to server (we will build this endpoint next)
-            const response = await fetch(`${BASE_URL}/create-new-group`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    groupName: name,
-                    description: desc,
-                    creator: user.email,
-                    invited: selectedFriends
-                })
-            });
+        const response = await fetch(`${BASE_URL}/create-new-group`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                groupName: name,
+                description: desc,
+                creator: user.email.toLowerCase(),
+                invited: selected
+            })
+        });
 
-            if (response.ok) {
-                alert("Group Created & Invites Sent!");
-                window.location.href = 'dashboard.html';
-            }
+        if (response.ok) {
+            alert("Group Created!");
+            window.location.href = 'dashboard.html';
         }
+    }
+    loadFriends();
+</script>
 
-        loadFriends();
-    </script>
 </body>
 </html>
+
