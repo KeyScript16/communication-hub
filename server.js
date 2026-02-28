@@ -31,6 +31,11 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 // API Routes
+// This tells the server to send your index file when someone visits the main site
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 app.get('/get-data', async (req, res) => {
     const rs = await pool.query('SELECT content FROM site_data WHERE id = 1');
     res.json(rs.rows[0]?.content || []);
@@ -69,3 +74,4 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`Server live on ${PORT} 🚀`));
+
