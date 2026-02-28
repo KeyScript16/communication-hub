@@ -16,10 +16,7 @@ const pool = new Pool({
 
 const initDB = async () => {
     try {
-        // 1. Create the original data table
         await pool.query('CREATE TABLE IF NOT EXISTS site_data (id SERIAL PRIMARY KEY, content JSONB)');
-        
-        // 2. Create the NEW Group Chat table (The "Backdoor" fix)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS chat_groups (
                 id SERIAL PRIMARY KEY,
@@ -31,55 +28,39 @@ const initDB = async () => {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        
         console.log("Database Tables Verified & Ready ✅");
     } catch (err) { 
         console.error("DB Init Error:", err); 
     }
 };
-
 initDB();
 
-// 2. MIDDLEWARE
-app.use(cors()); 
+// 2. MIDDLEWARE (The "Club Fix" for Express)
+app.use(cors({ origin: '*' })); 
 app.use(express.json());
 app.use(express.static(path.join(__dirname))); 
 
 async function readDB() {
     try {
-        const res = await pool.query('SELECT content FROM site_data LIMIT 1');
-        if (res.rows && res.rows[0] && res.rows[0].content) {
-            return res.rows[0].content; 
-        }
-        return []; 
+        const res = await pool.query('SELECT content FROM site_data WHERE id = 1 LIMIT 1');
+        return res.rows[0]?.content || []; 
     } catch (err) { 
-        console.error("Database Read Error:", err);
+        console.error("DB Read Error:", err);
         return []; 
     }
 }
 
 async function writeDB(data) {
     try {
-        // This is an "UPSERT": It updates the data if ID 1 exists, 
-        // or creates it if it doesn't. Much safer than DELETE + INSERT.
         await pool.query(`
-            INSERT INTO site_data (id, content) 
-            VALUES (1, $1) 
-            ON CONFLICT (id) 
-            DO UPDATE SET content = EXCLUDED.content`, 
+            INSERT INTO site_data (id, content) VALUES (1, $1) 
+            ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content`, 
             [JSON.stringify(data)]
         );
-    } catch (err) { 
-        console.error("Database Write Error:", err); 
-    }
+    } catch (err) { console.error("DB Write Error:", err); }
 }
 
-
-// 3. PAGE ROUTES
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.get('/dashboard.html', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
-
-// 4. API ROUTES
+// 3. API ROUTES
 app.get('/get-data', async (req, res) => {
     const data = await readDB();
     res.json(data); 
@@ -89,36 +70,28 @@ app.post('/save-data', async (req, res) => {
     await writeDB(req.body);
     res.json({ status: "Saved!" });
 });
-// --- NEW GROUP ROUTES ---
 
-// 1. Create the Group in the DB
 app.post('/create-new-group', async (req, res) => {
     const { groupName, description, creator, invited } = req.body;
     try {
+        const cleanInvited = Array.isArray(invited) ? invited.map(e => e.toLowerCase()) : [];
         await pool.query(
             'INSERT INTO chat_groups (group_name, description, creator_email, pending_invites, members) VALUES ($1, $2, $3, $4, $5)',
-            [groupName, description, creator, JSON.stringify(invited), JSON.stringify([creator])]
+            [groupName, description, creator.toLowerCase(), JSON.stringify(cleanInvited), JSON.stringify([creator.toLowerCase()])]
         );
         res.json({ status: "Group Created!" });
-    } catch (err) {
-        console.error("Group Create Error:", err);
-        res.status(500).json({ error: "DB Error" });
-    }
+    } catch (err) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// 2. Get Groups for a specific user (Invites + Joined)
+// FIXED: Improved Group Logic to prevent "Waking up server" hang
 app.get('/get-my-groups', async (req, res) => {
-    const { email } = req.query;
+    const email = req.query.email?.toLowerCase();
+    if (!email) return res.json({ joined: [], pending: [] });
+
     try {
-        // Find groups where user is either a member OR has a pending invite
-        const result = await pool.query(
-            "SELECT * FROM chat_groups WHERE members @> $1 OR pending_invites @> $1",
-            [JSON.stringify([email])]
-        );
-        
-        const joined = result.rows.filter(g => g.members.includes(email));
-        const pending = result.rows.filter(g => g.pending_invites.includes(email));
-        
+        const result = await pool.query('SELECT * FROM chat_groups');
+        const joined = result.rows.filter(g => (g.members || []).includes(email));
+        const pending = result.rows.filter(g => (g.pending_invites || []).includes(email));
         res.json({ joined, pending });
     } catch (err) {
         console.error("Fetch Groups Error:", err);
@@ -126,19 +99,17 @@ app.get('/get-my-groups', async (req, res) => {
     }
 });
 
-// 3. Accept a Group Invite
 app.post('/accept-group', async (req, res) => {
     const { groupId, email } = req.body;
+    const cleanEmail = email.toLowerCase();
     try {
         const groupRes = await pool.query('SELECT * FROM chat_groups WHERE id = $1', [groupId]);
         const group = groupRes.rows[0];
-
         if (group) {
             let members = group.members || [];
             let pending = group.pending_invites || [];
-
-            if (!members.includes(email)) members.push(email);
-            pending = pending.filter(e => e !== email);
+            if (!members.includes(cleanEmail)) members.push(cleanEmail);
+            pending = pending.filter(e => e !== cleanEmail);
 
             await pool.query(
                 'UPDATE chat_groups SET members = $1, pending_invites = $2 WHERE id = $3',
@@ -146,69 +117,33 @@ app.post('/accept-group', async (req, res) => {
             );
             res.json({ status: "Joined!" });
         }
-    } catch (err) {
-        res.status(500).send("Error joining");
-    }
+    } catch (err) { res.status(500).send("Error joining"); }
 });
 
-
-// 5. SOCKET.IO LOGIC
-// --- CONSOLIDATED SOCKET.IO LOGIC ---
-const io = new Server(server, { cors: { origin: "*" } });
+// 4. SOCKET.IO (The "Club Fix" for Sockets)
+const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 let onlineUsers = {}; 
-let clubRooms = {};
 
 io.on('connection', (socket) => {
-    
-    // 1. Online Status Logic
     socket.on('go-online', (data) => {
-        const email = (typeof data === 'object') ? data.email : data;
+        const email = data?.email?.toLowerCase().trim();
         if (email) {
-            const cleanEmail = email.toLowerCase().trim(); 
-            onlineUsers[cleanEmail] = socket.id; 
+            onlineUsers[email] = socket.id; 
             io.emit('update-online-list', Object.keys(onlineUsers));
         }
     });
 
-    // 2. Private Messaging & Chat Requests
-    socket.on('private-message', (data) => {
-        const targetSocketId = onlineUsers[data.to];
-        if (targetSocketId) io.to(targetSocketId).emit('new-message', data);
-    });
-
     socket.on('request-chat', (data) => {
-        const targetSocketId = onlineUsers[data.to];
-        if (targetSocketId) io.to(targetSocketId).emit('chat-requested', data);
+        const targetId = onlineUsers[data.to?.toLowerCase()];
+        if (targetId) io.to(targetId).emit('chat-requested', data);
     });
 
     socket.on('chat-response', (data) => {
-        const requesterSocketId = onlineUsers[data.to];
-        if (requesterSocketId) io.to(requesterSocketId).emit('start-chat-confirmed', data);
+        const targetId = onlineUsers[data.to?.toLowerCase()];
+        if (targetId) io.to(targetId).emit('start-chat-confirmed', data);
     });
 
-    // 3. Club / Group Logic
-    socket.on('join-club', (data) => {
-        const { groupId, username } = data;
-        const roomName = `room-${groupId}`;
-
-        if (!clubRooms[roomName]) clubRooms[roomName] = [];
-        const isAlreadyIn = clubRooms[roomName].find(u => u.username === username);
-        if (!isAlreadyIn) {
-            clubRooms[roomName].push({ username, socketId: socket.id });
-        }
-
-        const onlineCount = clubRooms[roomName].length;
-        if (onlineCount < 2) {
-            socket.emit('club-status', { allowed: false, message: "Waiting for members...", count: onlineCount });
-        } else {
-            socket.join(roomName);
-            io.to(roomName).emit('club-status', { allowed: true, count: onlineCount, users: clubRooms[roomName].map(u => u.username) });
-        }
-    });
-
-    // 4. Cleanup on Disconnect
     socket.on('disconnect', () => {
-        // Remove from Online List
         for (let email in onlineUsers) {
             if (onlineUsers[email] === socket.id) {
                 delete onlineUsers[email];
@@ -216,29 +151,18 @@ io.on('connection', (socket) => {
             }
         }
         io.emit('update-online-list', Object.keys(onlineUsers));
-
-        // Remove from Club Rooms
-        for (const room in clubRooms) {
-            clubRooms[room] = clubRooms[room].filter(u => u.socketId !== socket.id);
-            io.to(room).emit('club-status', { count: clubRooms[room].length, users: clubRooms[room].map(u => u.username) });
-        }
     });
 });
 
-// Admin Route (Outside the socket block)
 app.post('/admin/reset-all-data', async (req, res) => {
-    const { adminPassword } = req.body;
-    if (adminPassword !== "you must know what you're doing in order to delete everything.") {
-        return res.status(403).json({ error: "Access Denied" });
+    if (req.body.adminPassword === "you must know what you're doing in order to delete everything.") {
+        try {
+            await pool.query('TRUNCATE TABLE chat_groups, site_data RESTART IDENTITY CASCADE');
+            return res.json({ status: "System Purged!" });
+        } catch (err) { return res.status(500).json({ error: "Reset Failed" }); }
     }
-    try {
-        await pool.query('TRUNCATE TABLE chat_groups, site_data RESTART IDENTITY CASCADE');
-        res.json({ status: "System Purged!" });
-    } catch (err) { res.status(500).json({ error: "Reset Failed" }); }
+    res.status(403).json({ error: "Denied" });
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-
-
+server.listen(PORT, () => console.log(`Server live on port ${PORT} 🚀`));
