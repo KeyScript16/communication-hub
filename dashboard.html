@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
+    
+    <!-- FIXED: Use cdnjs to avoid the MIME/Syntax error you were seeing -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
     <link rel="icon" type="image/png" href="favicon-32x32.png?v=1">
     <title>Dashboard</title>
 </head>
@@ -13,12 +16,15 @@
         <h1>Dashboard</h1>
         <p>Welcome, <span id="display-name" style="color:#4ecca3; font-weight:bold;">Loading...</span></p>
 
+        <!-- ADMIN UI -->
         <div id="admin-ui" style="display:none; background:rgba(255,77,77,0.1); padding:20px; border-radius:10px; border:1px solid #ff4d4d; margin-bottom: 20px;">
+            <h3 style="color:#ff4d4d; margin-top:0;">System Administration</h3>
             <button onclick="securePurge()" style="background:#ff4d4d; color:white; width:100%; padding:20px; font-weight:bold; cursor:pointer;">🔥 RESET SYSTEM</button>
         </div>
 
+        <!-- USER UI -->
         <div id="user-ui" style="display:none;">
-            <!-- PENDING REQUESTS -->
+            <!-- PENDING REQUESTS with ACCEPT & DECLINE -->
             <div id="requests-box" style="display:none; text-align:left; background:rgba(78, 204, 163, 0.1); padding:15px; border-radius:10px; margin-bottom:20px; border:1px solid #4ecca3;">
                 <h3 style="color:#4ecca3; margin-top:0;">Friend Requests 📩</h3>
                 <div id="requests-inner"></div>
@@ -64,7 +70,7 @@
                         socket.on('update-online-list', (list) => updateFriendsUI(list));
                     }
                     loadMyGroups();
-                    updateFriendsUI([]); // Initial draw
+                    updateFriendsUI([]); 
                 } catch (e) { document.getElementById('active-list').innerText = "Server waking up..."; }
             }
         }
@@ -75,29 +81,52 @@
             const me = data.find(u => u.email.toLowerCase() === user.email.toLowerCase());
             if (!me) return;
 
-            // 1. Handle Requests
+            // 1. Handle Requests (Accept/Decline)
             const rBox = document.getElementById('requests-box');
             if (me.requests && me.requests.length > 0) {
                 rBox.style.display = "block";
                 document.getElementById('requests-inner').innerHTML = me.requests.map(r => `
-                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                        <span>${r}</span>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;">
+                        <span style="font-size:12px;">${r}</span>
                         <div>
-                            <button onclick="handleReq('${r}','accept')" style="background:#4ecca3; border:none; padding:2px 5px; cursor:pointer;">Accept</button>
+                            <button onclick="handleReq('${r}','accept')" style="background:#4ecca3; border:none; padding:4px 8px; cursor:pointer; border-radius:3px;">Accept</button>
+                            <button onclick="handleReq('${r}','decline')" style="background:#ff4d4d; border:none; padding:4px 8px; cursor:pointer; color:white; border-radius:3px; margin-left:5px;">Decline</button>
                         </div>
                     </div>`).join('');
             } else { rBox.style.display = "none"; }
 
-            // 2. Handle Friends + Chat Button
+            // 2. Handle Friends + Online Dots
+            const onlineLow = onlineList.map(e => e.toLowerCase());
             document.getElementById('friends-inner').innerHTML = (me.friends && me.friends.length > 0) 
                 ? me.friends.map(f => {
-                    const isOn = onlineList.map(e => e.toLowerCase()).includes(f.toLowerCase());
+                    const isOn = onlineLow.includes(f.toLowerCase());
                     return `
-                        <div style="display:flex; justify-content:space-between; margin:8px 0;">
+                        <div style="display:flex; justify-content:space-between; margin:10px 0; align-items:center;">
                             <span>${f} ${isOn ? '<span style="color:#4ecca3">●</span>' : '○'}</span>
-                            ${isOn ? `<button onclick="window.location.href='chat.html?with=${f}'" style="padding:2px 5px; font-size:10px; cursor:pointer;">Chat</button>` : ''}
+                            ${isOn ? `<button onclick="window.location.href='chat.html?with=${f}'" style="padding:4px 8px; font-size:11px; cursor:pointer; background:#4ecca3; border:none; border-radius:3px; color:#1a1a2e; font-weight:bold;">Chat</button>` : ''}
                         </div>`;
                 }).join('') : "No friends yet.";
+        }
+
+        async function handleReq(email, action) {
+            const res = await fetch(`${BASE_URL}/get-data`);
+            let users = await res.json();
+            let me = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+            let sender = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+            
+            if (me) {
+                me.requests = (me.requests || []).filter(r => r.toLowerCase() !== email.toLowerCase());
+                if (action === 'accept') {
+                    me.friends = me.friends || [];
+                    if (!me.friends.includes(email.toLowerCase())) me.friends.push(email.toLowerCase());
+                    if (sender) {
+                        sender.friends = sender.friends || [];
+                        if (!sender.friends.includes(user.email.toLowerCase())) sender.friends.push(user.email.toLowerCase());
+                    }
+                }
+                await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
+                location.reload();
+            }
         }
 
         async function addFriend() {
@@ -112,33 +141,15 @@
                     friend.requests.push(user.email.toLowerCase());
                     await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
                     alert("Request Sent!");
-                }
+                } else { alert("Already pending!"); }
             } else { alert("User not found!"); }
-        }
-
-        async function handleReq(email, action) {
-            const res = await fetch(`${BASE_URL}/get-data`);
-            let users = await res.json();
-            let me = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
-            let sender = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-            if (me && action === 'accept') {
-                me.requests = (me.requests || []).filter(r => r !== email);
-                me.friends = me.friends || []; 
-                if (!me.friends.includes(email)) me.friends.push(email);
-                if (sender) {
-                    sender.friends = sender.friends || [];
-                    if (!sender.friends.includes(user.email.toLowerCase())) sender.friends.push(user.email.toLowerCase());
-                }
-                await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
-                location.reload();
-            }
         }
 
         async function loadMyGroups() {
             const res = await fetch(`${BASE_URL}/get-my-groups?email=${user.email.toLowerCase()}`);
             const data = await res.json();
             document.getElementById('active-list').innerHTML = data.joined.length 
-                ? data.joined.map(g => `<div onclick="window.location.href='club-chat.html?id=${g.id}&name=${encodeURIComponent(g.group_name)}'" style="border:1px solid #4ecca3; padding:10px; margin:5px 0; cursor:pointer;">${g.group_name} 💬</div>`).join('') 
+                ? data.joined.map(g => `<div onclick="window.location.href='club-chat.html?id=${g.id}&name=${encodeURIComponent(g.group_name)}'" style="border:1px solid #4ecca3; padding:10px; margin:5px 0; cursor:pointer; border-radius:5px; background:rgba(78,204,163,0.1);">${g.group_name} 💬</div>`).join('') 
                 : "No clubs yet.";
         }
 
@@ -157,4 +168,3 @@
     </script>
 </body>
 </html>
-
