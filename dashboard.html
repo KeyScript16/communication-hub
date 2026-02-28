@@ -4,38 +4,83 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- FIXED: Full path to Socket.io -->
+    <script src="https://cdn.socket.io"></script>
     <title>Dashboard</title>
 </head>
 <body style="background:#1a1a2e; color:white; font-family:sans-serif; text-align:center;">
-    <div id="main-content" style="width:450px; margin:auto; padding-top: 50px;">
+    <div id="main-content" style="width:450px; margin:50px auto;">
         <h1>Dashboard</h1>
         <p>Welcome, <span id="display-name" style="color:#4ecca3; font-weight:bold;">Loading...</span></p>
 
         <div id="admin-ui" style="display:none;">
-            <button onclick="securePurge()" style="background:#ff4d4d; color:white; width:100%; padding:20px; font-weight:bold; cursor:pointer; border:none; border-radius:5px;">🔥 RESET ENTIRE SYSTEM</button>
+            <button onclick="securePurge()" style="background:#ff4d4d; color:white; width:100%; padding:20px; font-weight:bold; cursor:pointer; border:none; border-radius:5px;">🔥 RESET SYSTEM</button>
         </div>
 
         <div id="user-ui" style="display:none;">
-            <div id="friends-list" style="text-align:left; margin-bottom:20px;"></div>
-            <div id="active-section" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px;">
+            <!-- 1. FRIENDS SECTION (Back from the dead) -->
+            <div id="friends-list-container" style="text-align:left; margin-bottom:20px; background:rgba(255,255,255,0.05); padding:15px; border-radius:10px;">
+                <h3 style="color:#4ecca3; margin-top:0;">Friends</h3>
+                <div id="friends-inner">Loading friends list...</div>
+            </div>
+
+            <!-- 2. CLUBS SECTION -->
+            <div id="active-section" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; margin-bottom: 20px;">
                 <h3 style="color:#4ecca3; margin-top:0;">Your Clubs 🚀</h3>
                 <div id="active-list">Connecting to server...</div>
             </div>
-            <button onclick="addFriend()" style="margin-top:20px; width:100%; padding:12px; background:#4ecca3; color:#1a1a2e; font-weight:bold; border:none; border-radius:5px; cursor:pointer;">Add Friend</button>
+
+            <!-- 3. ACTIONS -->
+            <button onclick="addFriend()" style="width: 100%; padding: 12px; background: #4ecca3; color: #1a1a2e; font-weight: bold; border: none; border-radius: 5px; cursor: pointer;">Add New Friend</button>
+            <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; width: 100%; padding: 10px; background: rgba(78, 204, 163, 0.2); color: #4ecca3; border: 1px solid #4ecca3; border-radius: 5px; cursor: pointer;">Create New Group</button>
         </div>
         
-        <button onclick="logout()" style="margin-top:20px; width:100%; padding:10px; opacity:0.4; background:white; color:black; border:none; border-radius:5px; cursor:pointer;">Logout</button>
+        <button onclick="logout()" style="margin-top: 30px; width: 100%; padding: 10px; opacity: 0.4; background: white; color: black; border: none; border-radius: 5px; cursor: pointer;">Logout</button>
     </div>
 
     <script>
         const BASE_URL = 'https://crescendo-chat.onrender.com';
         const user = JSON.parse(sessionStorage.getItem("currentUser") || "{}");
-        if (!user.username) window.location.href = 'index.html';
+        
+        if (!user.username) {
+            window.location.href = 'index.html';
+        }
 
+        // Show name instantly
         document.getElementById('display-name').innerText = user.username;
 
-        const socket = typeof io !== 'undefined' ? io(BASE_URL) : null;
+        // Initialize Socket
+        const socket = (typeof io !== 'undefined') ? io(BASE_URL) : null;
+
+        // --- ADD FRIEND FUNCTION (Fixed ReferenceError) ---
+        async function addFriend() {
+            const target = prompt("Enter friend's email:").toLowerCase().trim();
+            if (!target) return;
+            
+            try {
+                const res = await fetch(`${BASE_URL}/get-data`);
+                let users = await res.json();
+                let me = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+                
+                if (me) {
+                    me.friends = me.friends || [];
+                    if (!me.friends.includes(target)) {
+                        me.friends.push(target);
+                        await fetch(`${BASE_URL}/save-data`, { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify(users) 
+                        });
+                        alert("Friend added successfully!");
+                        location.reload();
+                    } else {
+                        alert("Already friends!");
+                    }
+                }
+            } catch (err) {
+                alert("Error adding friend. Is the server awake?");
+            }
+        }
 
         async function init() {
             const isAdm = user.isAdmin === true || String(user.isAdmin) === "true";
@@ -43,24 +88,68 @@
 
             if (!isAdm) {
                 try {
+                    // Wake up Render
                     await fetch(`${BASE_URL}/get-data`);
+                    
                     if (socket) {
-                        socket.emit('go-online', { email: user.email.toLowerCase() });
-                        loadMyGroups();
+                        socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username });
+                        
+                        // Handle the Online Friends List
+                        socket.on('update-online-list', async (onlineEmails) => {
+                            updateFriendsUI(onlineEmails);
+                        });
                     }
-                } catch (e) { document.getElementById('active-list').innerText = "Server is waking up..."; }
+                    loadMyGroups();
+                } catch (e) { 
+                    document.getElementById('active-list').innerText = "Server waking up..."; 
+                }
             }
         }
 
+        async function updateFriendsUI(onlineEmails) {
+            const inner = document.getElementById('friends-inner');
+            const res = await fetch(`${BASE_URL}/get-data`);
+            const allUsers = await res.json();
+            const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+
+            if (!me || !me.friends || me.friends.length === 0) {
+                inner.innerText = "No friends added yet.";
+                return;
+            }
+
+            inner.innerHTML = me.friends.map(fEmail => {
+                const isOnline = onlineEmails.map(e => e.toLowerCase()).includes(fEmail.toLowerCase());
+                // Make normal chat clickable too
+                return `<div style="margin:8px 0; display:flex; justify-content:space-between;">
+                            <span>${fEmail} ${isOnline ? '<span style="color:#4ecca3">●</span>' : '○'}</span>
+                            ${isOnline ? `<button onclick="window.location.href='chat.html?with=${fEmail}'" style="padding:2px 5px; font-size:10px;">Chat</button>` : ''}
+                        </div>`;
+            }).join('');
+        }
+
         async function loadMyGroups() {
-            const res = await fetch(`${BASE_URL}/get-my-groups?email=${user.email.toLowerCase()}`);
-            const data = await res.json();
-            document.getElementById('active-list').innerHTML = data.joined.length ? data.joined.map(g => `<div style="border-left:4px solid #4ecca3; padding:10px; margin:5px 0; background:rgba(255,255,255,0.05); text-align:left;">${g.group_name}</div>`).join('') : "No clubs joined yet.";
+            try {
+                const res = await fetch(`${BASE_URL}/get-my-groups?email=${user.email.toLowerCase()}`);
+                const data = await res.json();
+                const list = document.getElementById('active-list');
+                
+                if (data.joined && data.joined.length > 0) {
+                    list.innerHTML = data.joined.map(g => `
+                        <div onclick="window.location.href='club-chat.html?id=${g.id}&name=${encodeURIComponent(g.group_name)}'" 
+                             style="border:1px solid #4ecca3; padding:10px; margin:5px 0; cursor:pointer; background:rgba(78,204,163,0.1); border-radius:5px;">
+                            ${g.group_name} 💬
+                        </div>`).join('');
+                } else {
+                    list.innerText = "No clubs joined yet.";
+                }
+            } catch (err) {
+                console.error("Groups Error:", err);
+            }
         }
 
         function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
+        
         init();
     </script>
 </body>
 </html>
-
