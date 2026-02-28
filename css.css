@@ -1,4 +1,8 @@
-@import url('https://fonts.googleapis.com');
+/* Delete the @import line and put this instead */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
 
 * {
     margin: 0;
@@ -168,6 +172,7 @@ a {
     transform: scale(1.3);
     filter: drop-shadow(0 0 5px #4ecca3);
 }
+
 
 
 
