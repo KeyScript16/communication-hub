@@ -9,7 +9,6 @@ const app = express();
 const server = http.createServer(app);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
-// 1. Initialize Tables
 const initDB = async () => {
     await pool.query('CREATE TABLE IF NOT EXISTS site_data (id SERIAL PRIMARY KEY, content JSONB)');
     await pool.query(`CREATE TABLE IF NOT EXISTS chat_groups (
@@ -17,7 +16,7 @@ const initDB = async () => {
         creator_email TEXT NOT NULL, members JSONB DEFAULT '[]',
         pending_invites JSONB DEFAULT '[]', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
-    console.log("DB Ready ✅");
+    console.log("Database Ready ✅");
 };
 initDB();
 
@@ -25,7 +24,6 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname))); 
 
-// 2. API Routes
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 app.get('/get-data', async (req, res) => {
@@ -38,15 +36,10 @@ app.post('/save-data', async (req, res) => {
     res.json({ status: "Saved!" });
 });
 
-// FIXED: This handles the Launch Group button in create-group.html
 app.post('/create-new-group', async (req, res) => {
     const { groupName, description, creator, invited } = req.body;
     try {
-        await pool.query(
-            'INSERT INTO chat_groups (group_name, description, creator_email, pending_invites, members) VALUES ($1, $2, $3, $4, $5)',
-            [groupName, description, creator, JSON.stringify(invited), JSON.stringify([creator])]
-        );
-        console.log(`🚀 Group Created: ${groupName}`);
+        await pool.query('INSERT INTO chat_groups (group_name, description, creator_email, pending_invites, members) VALUES ($1, $2, $3, $4, $5)', [groupName, description, creator, JSON.stringify(invited), JSON.stringify([creator])]);
         res.json({ status: "Success" });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -59,15 +52,6 @@ app.get('/get-my-groups', async (req, res) => {
     res.json({ joined, pending });
 });
 
-app.post('/admin/reset-all-data', async (req, res) => {
-    if (req.body.adminPassword === "you must know what you're doing in order to delete everything.") {
-        await pool.query('TRUNCATE TABLE site_data, chat_groups RESTART IDENTITY CASCADE');
-        return res.json({ status: "System Purged!" });
-    }
-    res.status(403).json({ status: "Denied" });
-});
-
-// 3. Socket Logic
 const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 let onlineUsers = {};
 
@@ -76,9 +60,26 @@ io.on('connection', (socket) => {
         if (data?.email) {
             onlineUsers[data.email.toLowerCase()] = socket.id;
             io.emit('update-online-list', Object.keys(onlineUsers));
-            console.log(`✨ USER ONLINE: ${data.email}`);
+            console.log(`✨ ONLINE: ${data.email}`);
         }
     });
+
+    // --- CHAT HANDSHAKE LOGIC ---
+    socket.on('request-chat', (data) => {
+        const targetId = onlineUsers[data.to?.toLowerCase()];
+        if (targetId) {
+            console.log(`📩 CHAT REQ: ${data.fromName} -> ${data.to}`);
+            io.to(targetId).emit('chat-requested', data);
+        }
+    });
+
+    socket.on('chat-response', (data) => {
+        const requesterId = onlineUsers[data.to?.toLowerCase()];
+        if (requesterId && data.accepted) {
+            io.to(requesterId).emit('start-chat-confirmed', data);
+        }
+    });
+
     socket.on('disconnect', () => {
         for (let e in onlineUsers) { if (onlineUsers[e] === socket.id) { delete onlineUsers[e]; break; } }
         io.emit('update-online-list', Object.keys(onlineUsers));
