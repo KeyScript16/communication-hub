@@ -4,16 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
-    <script src="https://cdnjs.cloudflare.com"></script>
+    
+    <!-- BACKUP 1: Official CDN -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
+    <!-- BACKUP 2: Cloudflare CDN (If Backup 1 is blocked) -->
+    <script>
+        if (typeof io === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com"><\/script>');
+        }
+    </script>
+
     <title>Dashboard</title>
 </head>
 <body style="background:#1a1a2e; color:white; font-family:sans-serif; text-align:center;">
-    <div id="main-content" style="width:450px; margin:50px auto;">
+    <div id="main-content" style="width:450px; margin:auto;">
         <h1>Dashboard</h1>
         <p>Welcome, <span id="display-name">Loading...</span></p>
 
         <div id="admin-ui" style="display:none;">
-            <button onclick="securePurge()" style="background:#ff4d4d; color:white; width:100%; padding:20px; cursor:pointer;">🔥 RESET SYSTEM</button>
+            <button onclick="securePurge()" style="background:#ff4d4d; color:white; width:100%; padding:20px; cursor:pointer; border:none; border-radius:5px;">🔥 RESET SYSTEM</button>
         </div>
 
         <div id="user-ui" style="display:none;">
@@ -22,21 +32,23 @@
                 <h3 style="color:#4ecca3;">Your Clubs 🚀</h3>
                 <div id="active-list">Waking up server...</div>
             </div>
-            <button onclick="addFriend()" style="margin-top:20px; width:100%; background:#4ecca3; color:#1a1a2e; cursor:pointer;">Add Friend</button>
+            <button onclick="addFriend()" style="margin-top:20px; width:100%; padding:12px; background:#4ecca3; color:#1a1a2e; border:none; border-radius:5px; cursor:pointer;">Add Friend</button>
         </div>
         
-        <button onclick="sessionStorage.clear(); window.location.href='index.html'" style="margin-top:30px; width:100%; opacity:0.5; cursor:pointer;">Logout</button>
+        <button onclick="sessionStorage.clear(); window.location.href='index.html'" style="margin-top:20px; width:100%; padding:10px; opacity:0.5; background:white; color:black; border:none; border-radius:5px; cursor:pointer;">Logout</button>
     </div>
 
     <script>
         const BASE_URL = 'https://crescendo-chat.onrender.com';
-        const user = JSON.parse(sessionStorage.getItem("currentUser") || "{}");
-        if (!user.username) window.location.href = 'index.html';
+        const userStr = sessionStorage.getItem("currentUser");
+        if (!userStr) window.location.href = 'index.html';
+        const user = JSON.parse(userStr);
 
-        // Set name instantly
+        // Name displays instantly
         document.getElementById('display-name').innerText = user.username;
 
-        const socket = typeof io !== 'undefined' ? io(BASE_URL) : null;
+        // Start socket
+        const socket = (typeof io !== 'undefined') ? io(BASE_URL) : null;
 
         async function init() {
             const isAdm = user.isAdmin === true || String(user.isAdmin) === "true";
@@ -44,21 +56,28 @@
 
             if (!isAdm) {
                 try {
+                    // This wakes up the Render server
                     await fetch(`${BASE_URL}/get-data`);
                     if (socket) {
                         socket.emit('go-online', { email: user.email.toLowerCase() });
                         loadMyGroups();
+                    } else {
+                        document.getElementById('active-list').innerText = "Socket blocked by your browser/ad-blocker.";
                     }
-                } catch (e) { document.getElementById('active-list').innerText = "Server slow... refresh in 30s."; }
+                } catch (e) { 
+                    document.getElementById('active-list').innerText = "Server is slow... refresh in 30s."; 
+                }
             }
         }
 
         async function loadMyGroups() {
-            const res = await fetch(`${BASE_URL}/get-my-groups?email=${user.email.toLowerCase()}`);
-            const data = await res.json();
-            document.getElementById('active-list').innerHTML = data.joined.length 
-                ? data.joined.map(g => `<div style="border:1px solid #4ecca3; padding:10px; margin:5px 0;">${g.group_name}</div>`).join('') 
-                : "No clubs joined yet.";
+            try {
+                const res = await fetch(`${BASE_URL}/get-my-groups?email=${user.email.toLowerCase()}`);
+                const data = await res.json();
+                document.getElementById('active-list').innerHTML = data.joined.length 
+                    ? data.joined.map(g => `<div style="border:1px solid #4ecca3; padding:10px; margin:5px 0; border-radius:5px;">${g.group_name}</div>`).join('') 
+                    : "No clubs joined yet.";
+            } catch(e) { console.error("Groups failed to load."); }
         }
 
         async function securePurge() {
