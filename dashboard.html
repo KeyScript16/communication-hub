@@ -2,168 +2,74 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Session</title>
     <link rel="stylesheet" href="css.css">
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <link rel="icon" type="image/png" href="favicon-32x32.png?v=1">
-    <title>Dashboard</title>
+    <script src="https://cdn.socket.js/4.7.2/socket.io.min.js"></script>
 </head>
-<body style="background:#1a1a2e; color:white; font-family:sans-serif; text-align:center;">
-    <div id="main-content" style="width:450px; margin:50px auto;">
-        <h1>Dashboard</h1>
-        <p>Welcome, <span id="display-name" style="color:#4ecca3; font-weight:bold;">Loading...</span></p>
-
-        <div id="admin-ui" style="display:none; background:rgba(255,77,77,0.1); padding:20px; border-radius:10px; border:1px solid #ff4d4d; margin-bottom: 20px;">
-            <button onclick="securePurge()" style="background:#ff4d4d; color:white; width:100%; padding:20px; font-weight:bold; cursor:pointer;">🔥 RESET SYSTEM</button>
+<body>
+    <div id="main-content" style="width: 500px; height: 80vh; display: flex; flex-direction: column;">
+        <h1 id="chat-header">Chat</h1>
+        <div id="message-history" style="flex-grow: 1; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 15px;"></div>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="chat-input" placeholder="Type a message...">
+            <button onclick="sendMessage()">Send</button>
         </div>
-
-        <div id="user-ui" style="display:none;">
-            <!-- REQUEST BOX -->
-            <div id="requests-box" style="display:none; text-align:left; background:rgba(78, 204, 163, 0.1); padding:15px; border-radius:10px; margin-bottom:20px; border:1px solid #4ecca3;">
-                <h3 style="color:#4ecca3; margin-top:0;">Invites 📩</h3>
-                <div id="requests-inner"></div>
-            </div>
-
-            <!-- FRIENDS LIST -->
-            <div style="text-align:left; margin-bottom:20px; background:rgba(255,255,255,0.05); padding:15px; border-radius:10px;">
-                <h3 style="color:#4ecca3; margin-top:0;">Friends</h3>
-                <div id="friends-inner">Loading...</div>
-            </div>
-
-            <!-- CLUBS -->
-            <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; margin-bottom: 20px;">
-                <h3 style="color:#4ecca3; margin-top:0;">Your Clubs 🚀</h3>
-                <div id="active-list">Connecting...</div>
-            </div>
-
-            <button onclick="addFriend()" style="width: 100%; padding: 12px; background: #4ecca3; color: #1a1a2e; font-weight: bold; border: none; border-radius: 5px; cursor: pointer;">Add New Friend</button>
-            <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; width: 100%; padding: 10px; background: rgba(78, 204, 163, 0.2); color: #4ecca3; border: 1px solid #4ecca3; border-radius: 5px; cursor: pointer;">Create New Group</button>
-        </div>
-        
-        <button onclick="logout()" style="margin-top: 30px; width: 100%; padding: 10px; opacity: 0.4; cursor: pointer;">Logout</button>
+        <button onclick="goBack()" style="background: none; color: #4ecca3; margin-top: 10px;">Back to Dashboard</button>
     </div>
 
     <script>
         const BASE_URL = 'https://crescendo-chat.onrender.com';
+        const socket = io(BASE_URL);
         const user = JSON.parse(sessionStorage.getItem("currentUser") || "{}");
-        if (!user.username) window.location.href = 'index.html';
+        const params = new URLSearchParams(window.location.search);
+        const friendEmail = params.get('with');
 
-        document.getElementById('display-name').innerText = user.username;
-        const socket = (typeof io !== 'undefined') ? io(BASE_URL) : null;
+        if (!user.email || !friendEmail) window.location.href = 'index.html';
+        document.getElementById('chat-header').innerText = "Chat with " + friendEmail;
+        
+        socket.emit('go-online', { email: user.email, username: user.username });
 
-        // --- HANDSHAKE LISTENERS ---
-        if (socket) {
-            socket.on('chat-requested', (data) => {
-                if (confirm(`${data.fromName} wants to chat! Accept?`)) {
-                    socket.emit('chat-response', { to: data.fromEmail, fromEmail: user.email.toLowerCase(), accepted: true });
-                    window.location.href = `chat.html?with=${data.fromEmail}`;
-                }
-            });
+        socket.on('new-message', (data) => {
+            if (data.fromEmail.toLowerCase() === friendEmail.toLowerCase()) {
+                displayMessage(data.fromName, data.message);
+            }
+        });
 
-            socket.on('start-chat-confirmed', (data) => {
-                window.location.href = `chat.html?with=${data.fromEmail}`;
-            });
-        }
-
-        async function init() {
-            const isAdm = user.isAdmin === true || String(user.isAdmin).toLowerCase() === "true";
-            document.getElementById('admin-ui').style.display = isAdm ? "block" : "none";
-            document.getElementById('user-ui').style.display = isAdm ? "none" : "block";
-
-            if (!isAdm) {
-                try {
-                    await fetch(`${BASE_URL}/get-data`);
-                    if (socket) {
-                        socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username });
-                        socket.on('update-online-list', (list) => updateFriendsUI(list));
-                    }
-                    loadMyGroups();
-                    updateFriendsUI([]); 
-                } catch (e) { document.getElementById('active-list').innerText = "Server waking up..."; }
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            if (input.value && friendEmail) {
+                socket.emit('private-message', { 
+                    to: friendEmail.toLowerCase(), 
+                    message: input.value, 
+                    fromName: user.username, 
+                    fromEmail: user.email.toLowerCase() 
+                });
+                displayMessage("Me", input.value);
+                input.value = "";
             }
         }
 
-        async function updateFriendsUI(onlineList) {
-            const res = await fetch(`${BASE_URL}/get-data`);
-            const allUsers = await res.json();
-            const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
-            if (!me) return;
-
-            // Handle Invites
-            const rBox = document.getElementById('requests-box');
-            if (me.requests && me.requests.length > 0) {
-                rBox.style.display = "block";
-                document.getElementById('requests-inner').innerHTML = me.requests.map(r => `
-                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                        <span>${r}</span>
-                        <button onclick="handleReq('${r}','accept')" style="background:#4ecca3; border:none; padding:4px; cursor:pointer;">Accept</button>
-                    </div>`).join('');
-            } else { rBox.style.display = "none"; }
-
-            // Handle Friends + UI Layout
-            const onlineLow = onlineList.map(e => e.toLowerCase());
-            document.getElementById('friends-inner').innerHTML = (me.friends || []).map(fEmail => {
-                const isOn = onlineLow.includes(fEmail.toLowerCase());
-                const friendObj = allUsers.find(u => u.email.toLowerCase() === fEmail.toLowerCase());
-                const displayName = friendObj ? friendObj.username : fEmail;
-
-                return `
-                    <div style="margin-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <strong style="font-size:16px;">${displayName}</strong>
-                            <span>${isOn ? '<span style="color:#4ecca3">● Online</span>' : '<span style="opacity:0.5">○ Offline</span>'}</span>
-                        </div>
-                        ${isOn ? `<button onclick="requestChat('${fEmail}', '${displayName}')" style="margin-top:8px; width:100%; background:#4ecca3; color:#1a1a2e; border:none; border-radius:3px; padding:5px; font-weight:bold; cursor:pointer;">Request Chat</button>` : ''}
-                    </div>`;
-            }).join('') || "No friends yet.";
+        function displayMessage(name, text) {
+            const history = document.getElementById('message-history');
+            const div = document.createElement('div');
+            div.innerHTML = `<strong>${name}:</strong> ${text}`;
+            history.appendChild(div);
+            history.scrollTop = history.scrollHeight;
         }
 
-        function requestChat(targetEmail, targetName) {
-            alert(`Request sent to ${targetName}. Please wait...`);
-            socket.emit('request-chat', { to: targetEmail, fromName: user.username, fromEmail: user.email.toLowerCase() });
+        function goBack() {
+            socket.emit('leave-chat', friendEmail);
+            window.location.href = 'dashboard.html';
         }
 
-        async function addFriend() {
-            const target = prompt("Email:").toLowerCase().trim();
-            if (!target || target === user.email.toLowerCase()) return;
-            const res = await fetch(`${BASE_URL}/get-data`);
-            let users = await res.json();
-            let friend = users.find(u => u.email.toLowerCase() === target);
-            if (friend) {
-                friend.requests = friend.requests || [];
-                if (!friend.requests.includes(user.email.toLowerCase())) {
-                    friend.requests.push(user.email.toLowerCase());
-                    await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
-                    alert("Request Sent!");
-                }
-            } else { alert("User not found!"); }
-        }
+        socket.on('chat-ended-by-friend', () => {
+            alert("Your friend left the chat.");
+            window.location.href = 'dashboard.html';
+        });
 
-        async function handleReq(email, action) {
-            const res = await fetch(`${BASE_URL}/get-data`);
-            let users = await res.json();
-            let me = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
-            let sender = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-            if (me && action === 'accept') {
-                me.requests = (me.requests || []).filter(r => r !== email);
-                me.friends = me.friends || []; me.friends.push(email);
-                if (sender) { sender.friends = sender.friends || []; sender.friends.push(user.email.toLowerCase()); }
-                await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
-                location.reload();
-            }
-        }
-
-        async function loadMyGroups() {
-            const res = await fetch(`${BASE_URL}/get-my-groups?email=${user.email.toLowerCase()}`);
-            const data = await res.json();
-            document.getElementById('active-list').innerHTML = data.joined.length 
-                ? data.joined.map(g => `<div onclick="window.location.href='club-chat.html?id=${g.id}&name=${encodeURIComponent(g.group_name)}'" style="border:1px solid #4ecca3; padding:10px; margin:5px 0; cursor:pointer;">${g.group_name} 💬</div>`).join('') 
-                : "No clubs yet.";
-        }
-
-        function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
-        init();
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if(e.key === 'Enter') sendMessage();
+        });
     </script>
 </body>
 </html>
-
