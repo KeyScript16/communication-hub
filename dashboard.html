@@ -4,11 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
-    
-    <!-- FIXED: Official Socket.io Client -->
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-
-    <!-- FIXED FAVICON: Added ?v=1 to force the browser to reload it -->
+    <script src="https://cdn.socket.io"></script>
     <link rel="icon" type="image/png" href="favicon-32x32.png?v=1">
     <title>Dashboard</title>
 </head>
@@ -17,31 +13,34 @@
         <h1>Dashboard</h1>
         <p>Welcome, <span id="display-name" style="color:#4ecca3; font-weight:bold;">Loading...</span></p>
 
-        <!-- FIXED ADMIN UI: The wrapper ID must match the script -->
         <div id="admin-ui" style="display:none; background:rgba(255,77,77,0.1); padding:20px; border-radius:10px; border:1px solid #ff4d4d; margin-bottom: 20px;">
-            <h3 style="color:#ff4d4d; margin-top:0;">System Administration</h3>
-            <button onclick="securePurge()" style="background:#ff4d4d; color:white; width:100%; padding:20px; font-weight:bold; cursor:pointer; border:none; border-radius:5px; font-size:16px;">
-                🔥 RESET ENTIRE SYSTEM (WIPE ALL)
-            </button>
+            <button onclick="securePurge()" style="background:#ff4d4d; color:white; width:100%; padding:20px; font-weight:bold; cursor:pointer;">🔥 RESET SYSTEM</button>
         </div>
 
-        <!-- USER UI -->
         <div id="user-ui" style="display:none;">
-            <div id="friends-list-container" style="text-align:left; margin-bottom:20px; background:rgba(255,255,255,0.05); padding:15px; border-radius:10px;">
+            <!-- PENDING REQUESTS -->
+            <div id="requests-box" style="display:none; text-align:left; background:rgba(78, 204, 163, 0.1); padding:15px; border-radius:10px; margin-bottom:20px; border:1px solid #4ecca3;">
+                <h3 style="color:#4ecca3; margin-top:0;">Friend Requests 📩</h3>
+                <div id="requests-inner"></div>
+            </div>
+
+            <!-- FRIENDS -->
+            <div style="text-align:left; margin-bottom:20px; background:rgba(255,255,255,0.05); padding:15px; border-radius:10px;">
                 <h3 style="color:#4ecca3; margin-top:0;">Friends</h3>
                 <div id="friends-inner">Loading...</div>
             </div>
 
-            <div id="active-section" style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; margin-bottom: 20px;">
+            <!-- CLUBS -->
+            <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; margin-bottom: 20px;">
                 <h3 style="color:#4ecca3; margin-top:0;">Your Clubs 🚀</h3>
-                <div id="active-list">Connecting to server...</div>
+                <div id="active-list">Connecting...</div>
             </div>
 
             <button onclick="addFriend()" style="width: 100%; padding: 12px; background: #4ecca3; color: #1a1a2e; font-weight: bold; border: none; border-radius: 5px; cursor: pointer;">Add New Friend</button>
             <button onclick="window.location.href='create-group.html'" style="margin-top: 10px; width: 100%; padding: 10px; background: rgba(78, 204, 163, 0.2); color: #4ecca3; border: 1px solid #4ecca3; border-radius: 5px; cursor: pointer;">Create New Group</button>
         </div>
         
-        <button onclick="logout()" style="margin-top: 30px; width: 100%; padding: 10px; opacity: 0.4; background: white; color: black; border: none; border-radius: 5px; cursor: pointer;">Logout</button>
+        <button onclick="logout()" style="margin-top: 30px; width: 100%; padding: 10px; opacity: 0.4; cursor: pointer;">Logout</button>
     </div>
 
     <script>
@@ -53,9 +52,7 @@
         const socket = (typeof io !== 'undefined') ? io(BASE_URL) : null;
 
         async function init() {
-            // FIXED: Handles both boolean and string "true" from DB
             const isAdm = user.isAdmin === true || String(user.isAdmin).toLowerCase() === "true";
-            
             document.getElementById('admin-ui').style.display = isAdm ? "block" : "none";
             document.getElementById('user-ui').style.display = isAdm ? "none" : "block";
 
@@ -67,35 +64,73 @@
                         socket.on('update-online-list', (list) => updateFriendsUI(list));
                     }
                     loadMyGroups();
+                    updateFriendsUI([]); // Initial draw
                 } catch (e) { document.getElementById('active-list').innerText = "Server waking up..."; }
             }
         }
 
-        async function updateFriendsUI(onlineEmails) {
-            const inner = document.getElementById('friends-inner');
+        async function updateFriendsUI(onlineList) {
             const res = await fetch(`${BASE_URL}/get-data`);
             const data = await res.json();
             const me = data.find(u => u.email.toLowerCase() === user.email.toLowerCase());
-            if (!me || !me.friends) { inner.innerText = "No friends yet."; return; }
-            inner.innerHTML = me.friends.map(f => {
-                const isOn = onlineEmails.map(e => e.toLowerCase()).includes(f.toLowerCase());
-                return `<div style="margin:5px 0;">${f} ${isOn ? '<span style="color:#4ecca3">●</span>' : '○'}</div>`;
-            }).join('');
+            if (!me) return;
+
+            // 1. Handle Requests
+            const rBox = document.getElementById('requests-box');
+            if (me.requests && me.requests.length > 0) {
+                rBox.style.display = "block";
+                document.getElementById('requests-inner').innerHTML = me.requests.map(r => `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                        <span>${r}</span>
+                        <div>
+                            <button onclick="handleReq('${r}','accept')" style="background:#4ecca3; border:none; padding:2px 5px; cursor:pointer;">Accept</button>
+                        </div>
+                    </div>`).join('');
+            } else { rBox.style.display = "none"; }
+
+            // 2. Handle Friends + Chat Button
+            document.getElementById('friends-inner').innerHTML = (me.friends && me.friends.length > 0) 
+                ? me.friends.map(f => {
+                    const isOn = onlineList.map(e => e.toLowerCase()).includes(f.toLowerCase());
+                    return `
+                        <div style="display:flex; justify-content:space-between; margin:8px 0;">
+                            <span>${f} ${isOn ? '<span style="color:#4ecca3">●</span>' : '○'}</span>
+                            ${isOn ? `<button onclick="window.location.href='chat.html?with=${f}'" style="padding:2px 5px; font-size:10px; cursor:pointer;">Chat</button>` : ''}
+                        </div>`;
+                }).join('') : "No friends yet.";
         }
 
         async function addFriend() {
             const target = prompt("Email:").toLowerCase().trim();
-            if (!target) return;
+            if (!target || target === user.email.toLowerCase()) return;
+            const res = await fetch(`${BASE_URL}/get-data`);
+            let users = await res.json();
+            let friend = users.find(u => u.email.toLowerCase() === target);
+            if (friend) {
+                friend.requests = friend.requests || [];
+                if (!friend.requests.includes(user.email.toLowerCase())) {
+                    friend.requests.push(user.email.toLowerCase());
+                    await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
+                    alert("Request Sent!");
+                }
+            } else { alert("User not found!"); }
+        }
+
+        async function handleReq(email, action) {
             const res = await fetch(`${BASE_URL}/get-data`);
             let users = await res.json();
             let me = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
-            if (me) {
-                me.friends = me.friends || [];
-                if (!me.friends.includes(target)) {
-                    me.friends.push(target);
-                    await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
-                    alert("Added!"); location.reload();
+            let sender = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+            if (me && action === 'accept') {
+                me.requests = (me.requests || []).filter(r => r !== email);
+                me.friends = me.friends || []; 
+                if (!me.friends.includes(email)) me.friends.push(email);
+                if (sender) {
+                    sender.friends = sender.friends || [];
+                    if (!sender.friends.includes(user.email.toLowerCase())) sender.friends.push(user.email.toLowerCase());
                 }
+                await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
+                location.reload();
             }
         }
 
@@ -109,12 +144,11 @@
 
         async function securePurge() {
             if (confirm("Wipe everything?")) {
-                const res = await fetch(`${BASE_URL}/admin/reset-all-data`, { 
+                await fetch(`${BASE_URL}/admin/reset-all-data`, { 
                     method: 'POST', headers: {'Content-Type': 'application/json'}, 
                     body: JSON.stringify({adminPassword: "you must know what you're doing in order to delete everything."})
                 });
-                const data = await res.json();
-                alert(data.status); logout();
+                sessionStorage.clear(); window.location.href = 'index.html';
             }
         }
 
@@ -123,4 +157,3 @@
     </script>
 </body>
 </html>
-
