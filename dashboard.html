@@ -46,24 +46,35 @@
         const socket = (typeof io !== 'undefined') ? io(BASE_URL) : null;
 
         // --- 1. INITIALIZE ---
-        async function init() {
-            document.getElementById('user-ui').style.display = "block";
-            try {
-                // Wake up server immediately
-                await fetch(`${BASE_URL}/get-data`);
-                if (socket) {
-                    socket.emit('go-online', { email: user.email.toLowerCase(), username: user.username });
-                    
-                    // Listen for online updates
-                    socket.on('update-online-list', (onlineEmails) => {
-                        renderUserLists(onlineEmails);
-                    });
-                }
-                // Load data for the first time without waiting for socket
-                renderUserLists([]);
-                loadMyGroups();
-            } catch (e) { console.log("Server waking up..."); }
-        }
+       async function init() {
+    console.log("Checking permissions for:", user.username);
+    console.log("Is Admin Value:", user.isAdmin);
+
+    const adminUI = document.getElementById('admin-ui');
+    const userUI = document.getElementById('user-ui');
+
+    // FIXED: Checks for true (boolean) OR "true" (string)
+    const isActuallyAdmin = user.isAdmin === true || String(user.isAdmin).toLowerCase() === "true";
+
+    if (isActuallyAdmin) {
+        console.log("✅ ADMIN ACCESS GRANTED");
+        if(adminUI) adminUI.style.display = "block";
+        if(userUI) userUI.style.display = "none";
+    } else {
+        console.log("👤 USER ACCESS GRANTED");
+        if(adminUI) adminUI.style.display = "none";
+        if(userUI) userUI.style.display = "block";
+        
+        try {
+            await fetch(`${BASE_URL}/get-data`);
+            if (socket) {
+                socket.emit('go-online', { email: user.email.toLowerCase() });
+                loadClubs();
+            }
+        } catch (e) { console.log("Server waking up..."); }
+    }
+}
+
 
         // --- 2. RENDER FRIENDS & REQUESTS ---
         async function renderUserLists(onlineEmails = []) {
@@ -153,4 +164,5 @@
     </script>
 </body>
 </html>
+
 
