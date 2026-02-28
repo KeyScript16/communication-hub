@@ -9,7 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
-// Database Tables
+// 1. Initialize Tables
 const initDB = async () => {
     await pool.query('CREATE TABLE IF NOT EXISTS site_data (id SERIAL PRIMARY KEY, content JSONB)');
     await pool.query(`CREATE TABLE IF NOT EXISTS chat_groups (
@@ -25,6 +25,7 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname))); 
 
+// 2. API Routes
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 app.get('/get-data', async (req, res) => {
@@ -35,6 +36,19 @@ app.get('/get-data', async (req, res) => {
 app.post('/save-data', async (req, res) => {
     await pool.query('INSERT INTO site_data (id, content) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content', [JSON.stringify(req.body)]);
     res.json({ status: "Saved!" });
+});
+
+// FIXED: This handles the Launch Group button in create-group.html
+app.post('/create-new-group', async (req, res) => {
+    const { groupName, description, creator, invited } = req.body;
+    try {
+        await pool.query(
+            'INSERT INTO chat_groups (group_name, description, creator_email, pending_invites, members) VALUES ($1, $2, $3, $4, $5)',
+            [groupName, description, creator, JSON.stringify(invited), JSON.stringify([creator])]
+        );
+        console.log(`🚀 Group Created: ${groupName}`);
+        res.json({ status: "Success" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/get-my-groups', async (req, res) => {
@@ -53,6 +67,7 @@ app.post('/admin/reset-all-data', async (req, res) => {
     res.status(403).json({ status: "Denied" });
 });
 
+// 3. Socket Logic
 const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 let onlineUsers = {};
 
