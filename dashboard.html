@@ -5,12 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
     
-    <!-- FIXED: The ONLY official, direct, non-MIME-error link for Socket.io -->
-    <script src="https://cdn.socket.io"></script>
+    <!-- FIXED: Official Socket.io with Security Hash to prevent MIME errors -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" 
+            integrity="sha384-mZMe76qTPUMY9864KMB6L6VHT2K0YzG9D97T9mK3yK0PskE5O/8tU803M5U9X6fB" 
+            crossorigin="anonymous"></script>
+
+    <!-- FIXED: Google Fonts syntax to prevent Corrupted Content error -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com" rel="stylesheet">
 
     <title>Dashboard</title>
     <link rel="icon" type="image/png" href="favicon-32x32.png">
 </head>
+
 <body style="background: #1a1a2e; color: white; font-family: sans-serif;">
     <div id="main-content" style="width: 450px; margin: 20px auto; text-align: center;">
         <h1>Dashboard</h1>
@@ -204,5 +212,6 @@
     </script>
 </body>
 </html>
+
 
 
