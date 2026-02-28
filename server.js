@@ -16,7 +16,7 @@ const initDB = async () => {
         creator_email TEXT NOT NULL, members JSONB DEFAULT '[]',
         pending_invites JSONB DEFAULT '[]', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
-    console.log("Database Ready ✅");
+    console.log("DB Ready ✅");
 };
 initDB();
 
@@ -52,32 +52,42 @@ app.get('/get-my-groups', async (req, res) => {
     res.json({ joined, pending });
 });
 
+// --- SOCKET LOGIC ---
 const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 let onlineUsers = {};
 
 io.on('connection', (socket) => {
     socket.on('go-online', (data) => {
         if (data?.email) {
-            onlineUsers[data.email.toLowerCase()] = socket.id;
+            const cleanEmail = data.email.toLowerCase();
+            onlineUsers[cleanEmail] = socket.id;
             io.emit('update-online-list', Object.keys(onlineUsers));
-            console.log(`✨ ONLINE: ${data.email}`);
+            console.log(`✨ ONLINE: ${cleanEmail}`);
         }
     });
 
-    // --- CHAT HANDSHAKE LOGIC ---
     socket.on('request-chat', (data) => {
         const targetId = onlineUsers[data.to?.toLowerCase()];
-        if (targetId) {
-            console.log(`📩 CHAT REQ: ${data.fromName} -> ${data.to}`);
-            io.to(targetId).emit('chat-requested', data);
-        }
+        if (targetId) io.to(targetId).emit('chat-requested', data);
     });
 
     socket.on('chat-response', (data) => {
-        const requesterId = onlineUsers[data.to?.toLowerCase()];
-        if (requesterId && data.accepted) {
-            io.to(requesterId).emit('start-chat-confirmed', data);
+        const reqId = onlineUsers[data.to?.toLowerCase()];
+        if (reqId) io.to(reqId).emit('start-chat-confirmed', data);
+    });
+
+    // FIXED: Private Message Delivery
+    socket.on('private-message', (data) => {
+        const targetId = onlineUsers[data.to?.toLowerCase()];
+        if (targetId) {
+            io.to(targetId).emit('new-message', data);
         }
+    });
+
+    // FIXED: Leave Chat Logic
+    socket.on('leave-chat', (friendEmail) => {
+        const targetId = onlineUsers[friendEmail?.toLowerCase()];
+        if (targetId) io.to(targetId).emit('chat-ended-by-friend');
     });
 
     socket.on('disconnect', () => {
