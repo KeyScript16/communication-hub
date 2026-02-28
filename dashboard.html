@@ -1,71 +1,78 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
-const { Pool } = require('pg');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css.css">
+    <script src="https://cdnjs.cloudflare.com"></script>
+    <title>Dashboard</title>
+</head>
+<body style="background:#1a1a2e; color:white; font-family:sans-serif; text-align:center;">
+    <div id="main-content" style="width:450px; margin:50px auto;">
+        <h1>Dashboard</h1>
+        <p>Welcome, <span id="display-name">Loading...</span></p>
 
-const app = express();
-const server = http.createServer(app);
+        <div id="admin-ui" style="display:none;">
+            <button onclick="securePurge()" style="background:#ff4d4d; color:white; width:100%; padding:20px; cursor:pointer;">🔥 RESET SYSTEM</button>
+        </div>
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
+        <div id="user-ui" style="display:none;">
+            <div id="friends-list" style="text-align:left; margin-bottom:20px;"></div>
+            <div id="active-section">
+                <h3 style="color:#4ecca3;">Your Clubs 🚀</h3>
+                <div id="active-list">Waking up server...</div>
+            </div>
+            <button onclick="addFriend()" style="margin-top:20px; width:100%; background:#4ecca3; color:#1a1a2e; cursor:pointer;">Add Friend</button>
+        </div>
+        
+        <button onclick="sessionStorage.clear(); window.location.href='index.html'" style="margin-top:30px; width:100%; opacity:0.5; cursor:pointer;">Logout</button>
+    </div>
 
-// Initialize Database Tables
-const initDB = async () => {
-    try {
-        await pool.query('CREATE TABLE IF NOT EXISTS site_data (id SERIAL PRIMARY KEY, content JSONB)');
-        await pool.query(`CREATE TABLE IF NOT EXISTS chat_groups (
-            id SERIAL PRIMARY KEY, group_name TEXT NOT NULL, description TEXT,
-            creator_email TEXT NOT NULL, members JSONB DEFAULT '[]',
-            pending_invites JSONB DEFAULT '[]', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`);
-        console.log("DB Ready ✅");
-    } catch (err) { console.error("DB Error:", err); }
-};
-initDB();
+    <script>
+        const BASE_URL = 'https://crescendo-chat.onrender.com';
+        const user = JSON.parse(sessionStorage.getItem("currentUser") || "{}");
+        if (!user.username) window.location.href = 'index.html';
 
-// Middlewares - THE "LAZY" CORS FIX
-app.use(cors({ origin: '*' }));
-app.use(express.json());
+        // Set name instantly
+        document.getElementById('display-name').innerText = user.username;
 
-// API Routes
-app.get('/get-data', async (req, res) => {
-    const rs = await pool.query('SELECT content FROM site_data WHERE id = 1');
-    res.json(rs.rows[0]?.content || []);
-});
+        const socket = typeof io !== 'undefined' ? io(BASE_URL) : null;
 
-app.post('/save-data', async (req, res) => {
-    await pool.query('INSERT INTO site_data (id, content) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content', [JSON.stringify(req.body)]);
-    res.json({ status: "Saved" });
-});
+        async function init() {
+            const isAdm = user.isAdmin === true || String(user.isAdmin) === "true";
+            document.getElementById(isAdm ? 'admin-ui' : 'user-ui').style.display = "block";
 
-app.get('/get-my-groups', async (req, res) => {
-    const email = req.query.email?.toLowerCase();
-    if (!email) return res.json({ joined: [], pending: [] });
-    try {
-        const result = await pool.query('SELECT * FROM chat_groups');
-        const joined = result.rows.filter(g => (g.members || []).includes(email));
-        const pending = result.rows.filter(g => (g.pending_invites || []).includes(email));
-        res.json({ joined, pending });
-    } catch (e) { res.status(500).json({ joined: [], pending: [] }); }
-});
+            if (!isAdm) {
+                try {
+                    await fetch(`${BASE_URL}/get-data`);
+                    if (socket) {
+                        socket.emit('go-online', { email: user.email.toLowerCase() });
+                        loadMyGroups();
+                    }
+                } catch (e) { document.getElementById('active-list').innerText = "Server slow... refresh in 30s."; }
+            }
+        }
 
-// Socket.io with CORS enabled
-const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
-let onlineUsers = {};
+        async function loadMyGroups() {
+            const res = await fetch(`${BASE_URL}/get-my-groups?email=${user.email.toLowerCase()}`);
+            const data = await res.json();
+            document.getElementById('active-list').innerHTML = data.joined.length 
+                ? data.joined.map(g => `<div style="border:1px solid #4ecca3; padding:10px; margin:5px 0;">${g.group_name}</div>`).join('') 
+                : "No clubs joined yet.";
+        }
 
-io.on('connection', (socket) => {
-    socket.on('go-online', (data) => {
-        const email = data?.email?.toLowerCase().trim();
-        if (email) { onlineUsers[email] = socket.id; io.emit('update-online-list', Object.keys(onlineUsers)); }
-    });
-    socket.on('disconnect', () => {
-        for (let e in onlineUsers) { if (onlineUsers[e] === socket.id) { delete onlineUsers[e]; break; } }
-        io.emit('update-online-list', Object.keys(onlineUsers));
-    });
-});
+        async function securePurge() {
+            if (confirm("Wipe everything?")) {
+                await fetch(`${BASE_URL}/admin/reset-all-data`, { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({adminPassword: "you must know what you're doing in order to delete everything."})
+                });
+                location.reload();
+            }
+        }
 
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`Server live on ${PORT} 🚀`));
+        init();
+    </script>
+</body>
+</html>
