@@ -5,15 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
     
-    <!-- FIXED: Official Socket.io without the integrity hash to avoid blocking -->
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- Socket.io (Leave this since it's working!) -->
+    <script src="https://cdn.socket.io"></script>
 
-    <!-- FIXED: Google Fonts using simpler, older syntax to avoid MIME mismatch -->
-    <link href="https://fonts.googleapis.com" rel="stylesheet">
+    <!-- FIXED FONTS: Using @import to avoid NS_ERROR_CORRUPTED_CONTENT -->
+    <style>
+        @import url('https://fonts.googleapis.com');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
 
     <title>Dashboard</title>
-    <link rel="icon" type="image/png" href="favicon-32x32.png">
 </head>
+
 
 
 <body style="background: #1a1a2e; color: white; font-family: sans-serif;">
@@ -209,6 +215,7 @@
     </script>
 </body>
 </html>
+
 
 
 
