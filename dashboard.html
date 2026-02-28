@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css.css">
-    
-    <!-- FIXED: Use cdnjs to avoid the MIME/Syntax error you were seeing -->
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    
+    <script src="https://cdnjs.cloudflare.com"></script>
     <link rel="icon" type="image/png" href="favicon-32x32.png?v=1">
     <title>Dashboard</title>
 </head>
@@ -16,21 +13,18 @@
         <h1>Dashboard</h1>
         <p>Welcome, <span id="display-name" style="color:#4ecca3; font-weight:bold;">Loading...</span></p>
 
-        <!-- ADMIN UI -->
         <div id="admin-ui" style="display:none; background:rgba(255,77,77,0.1); padding:20px; border-radius:10px; border:1px solid #ff4d4d; margin-bottom: 20px;">
-            <h3 style="color:#ff4d4d; margin-top:0;">System Administration</h3>
             <button onclick="securePurge()" style="background:#ff4d4d; color:white; width:100%; padding:20px; font-weight:bold; cursor:pointer;">🔥 RESET SYSTEM</button>
         </div>
 
-        <!-- USER UI -->
         <div id="user-ui" style="display:none;">
-            <!-- PENDING REQUESTS with ACCEPT & DECLINE -->
+            <!-- REQUEST BOX -->
             <div id="requests-box" style="display:none; text-align:left; background:rgba(78, 204, 163, 0.1); padding:15px; border-radius:10px; margin-bottom:20px; border:1px solid #4ecca3;">
-                <h3 style="color:#4ecca3; margin-top:0;">Friend Requests 📩</h3>
+                <h3 style="color:#4ecca3; margin-top:0;">Invites 📩</h3>
                 <div id="requests-inner"></div>
             </div>
 
-            <!-- FRIENDS -->
+            <!-- FRIENDS LIST -->
             <div style="text-align:left; margin-bottom:20px; background:rgba(255,255,255,0.05); padding:15px; border-radius:10px;">
                 <h3 style="color:#4ecca3; margin-top:0;">Friends</h3>
                 <div id="friends-inner">Loading...</div>
@@ -57,6 +51,20 @@
         document.getElementById('display-name').innerText = user.username;
         const socket = (typeof io !== 'undefined') ? io(BASE_URL) : null;
 
+        // --- HANDSHAKE LISTENERS ---
+        if (socket) {
+            socket.on('chat-requested', (data) => {
+                if (confirm(`${data.fromName} wants to chat! Accept?`)) {
+                    socket.emit('chat-response', { to: data.fromEmail, fromEmail: user.email.toLowerCase(), accepted: true });
+                    window.location.href = `chat.html?with=${data.fromEmail}`;
+                }
+            });
+
+            socket.on('start-chat-confirmed', (data) => {
+                window.location.href = `chat.html?with=${data.fromEmail}`;
+            });
+        }
+
         async function init() {
             const isAdm = user.isAdmin === true || String(user.isAdmin).toLowerCase() === "true";
             document.getElementById('admin-ui').style.display = isAdm ? "block" : "none";
@@ -77,56 +85,42 @@
 
         async function updateFriendsUI(onlineList) {
             const res = await fetch(`${BASE_URL}/get-data`);
-            const data = await res.json();
-            const me = data.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+            const allUsers = await res.json();
+            const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
             if (!me) return;
 
-            // 1. Handle Requests (Accept/Decline)
+            // Handle Invites
             const rBox = document.getElementById('requests-box');
             if (me.requests && me.requests.length > 0) {
                 rBox.style.display = "block";
                 document.getElementById('requests-inner').innerHTML = me.requests.map(r => `
-                    <div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;">
-                        <span style="font-size:12px;">${r}</span>
-                        <div>
-                            <button onclick="handleReq('${r}','accept')" style="background:#4ecca3; border:none; padding:4px 8px; cursor:pointer; border-radius:3px;">Accept</button>
-                            <button onclick="handleReq('${r}','decline')" style="background:#ff4d4d; border:none; padding:4px 8px; cursor:pointer; color:white; border-radius:3px; margin-left:5px;">Decline</button>
-                        </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                        <span>${r}</span>
+                        <button onclick="handleReq('${r}','accept')" style="background:#4ecca3; border:none; padding:4px; cursor:pointer;">Accept</button>
                     </div>`).join('');
             } else { rBox.style.display = "none"; }
 
-            // 2. Handle Friends + Online Dots
+            // Handle Friends + UI Layout
             const onlineLow = onlineList.map(e => e.toLowerCase());
-            document.getElementById('friends-inner').innerHTML = (me.friends && me.friends.length > 0) 
-                ? me.friends.map(f => {
-                    const isOn = onlineLow.includes(f.toLowerCase());
-                    return `
-                        <div style="display:flex; justify-content:space-between; margin:10px 0; align-items:center;">
-                            <span>${f} ${isOn ? '<span style="color:#4ecca3">●</span>' : '○'}</span>
-                            ${isOn ? `<button onclick="window.location.href='chat.html?with=${f}'" style="padding:4px 8px; font-size:11px; cursor:pointer; background:#4ecca3; border:none; border-radius:3px; color:#1a1a2e; font-weight:bold;">Chat</button>` : ''}
-                        </div>`;
-                }).join('') : "No friends yet.";
+            document.getElementById('friends-inner').innerHTML = (me.friends || []).map(fEmail => {
+                const isOn = onlineLow.includes(fEmail.toLowerCase());
+                const friendObj = allUsers.find(u => u.email.toLowerCase() === fEmail.toLowerCase());
+                const displayName = friendObj ? friendObj.username : fEmail;
+
+                return `
+                    <div style="margin-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <strong style="font-size:16px;">${displayName}</strong>
+                            <span>${isOn ? '<span style="color:#4ecca3">● Online</span>' : '<span style="opacity:0.5">○ Offline</span>'}</span>
+                        </div>
+                        ${isOn ? `<button onclick="requestChat('${fEmail}', '${displayName}')" style="margin-top:8px; width:100%; background:#4ecca3; color:#1a1a2e; border:none; border-radius:3px; padding:5px; font-weight:bold; cursor:pointer;">Request Chat</button>` : ''}
+                    </div>`;
+            }).join('') || "No friends yet.";
         }
 
-        async function handleReq(email, action) {
-            const res = await fetch(`${BASE_URL}/get-data`);
-            let users = await res.json();
-            let me = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
-            let sender = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-            
-            if (me) {
-                me.requests = (me.requests || []).filter(r => r.toLowerCase() !== email.toLowerCase());
-                if (action === 'accept') {
-                    me.friends = me.friends || [];
-                    if (!me.friends.includes(email.toLowerCase())) me.friends.push(email.toLowerCase());
-                    if (sender) {
-                        sender.friends = sender.friends || [];
-                        if (!sender.friends.includes(user.email.toLowerCase())) sender.friends.push(user.email.toLowerCase());
-                    }
-                }
-                await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
-                location.reload();
-            }
+        function requestChat(targetEmail, targetName) {
+            alert(`Request sent to ${targetName}. Please wait...`);
+            socket.emit('request-chat', { to: targetEmail, fromName: user.username, fromEmail: user.email.toLowerCase() });
         }
 
         async function addFriend() {
@@ -141,26 +135,30 @@
                     friend.requests.push(user.email.toLowerCase());
                     await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
                     alert("Request Sent!");
-                } else { alert("Already pending!"); }
+                }
             } else { alert("User not found!"); }
+        }
+
+        async function handleReq(email, action) {
+            const res = await fetch(`${BASE_URL}/get-data`);
+            let users = await res.json();
+            let me = users.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+            let sender = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+            if (me && action === 'accept') {
+                me.requests = (me.requests || []).filter(r => r !== email);
+                me.friends = me.friends || []; me.friends.push(email);
+                if (sender) { sender.friends = sender.friends || []; sender.friends.push(user.email.toLowerCase()); }
+                await fetch(`${BASE_URL}/save-data`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(users) });
+                location.reload();
+            }
         }
 
         async function loadMyGroups() {
             const res = await fetch(`${BASE_URL}/get-my-groups?email=${user.email.toLowerCase()}`);
             const data = await res.json();
             document.getElementById('active-list').innerHTML = data.joined.length 
-                ? data.joined.map(g => `<div onclick="window.location.href='club-chat.html?id=${g.id}&name=${encodeURIComponent(g.group_name)}'" style="border:1px solid #4ecca3; padding:10px; margin:5px 0; cursor:pointer; border-radius:5px; background:rgba(78,204,163,0.1);">${g.group_name} 💬</div>`).join('') 
+                ? data.joined.map(g => `<div onclick="window.location.href='club-chat.html?id=${g.id}&name=${encodeURIComponent(g.group_name)}'" style="border:1px solid #4ecca3; padding:10px; margin:5px 0; cursor:pointer;">${g.group_name} 💬</div>`).join('') 
                 : "No clubs yet.";
-        }
-
-        async function securePurge() {
-            if (confirm("Wipe everything?")) {
-                await fetch(`${BASE_URL}/admin/reset-all-data`, { 
-                    method: 'POST', headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({adminPassword: "you must know what you're doing in order to delete everything."})
-                });
-                sessionStorage.clear(); window.location.href = 'index.html';
-            }
         }
 
         function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
