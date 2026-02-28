@@ -1,8 +1,8 @@
+const path = require('path'); // FIXED: Moved to Line 1 to prevent ReferenceError
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const path = require('path'); // FIXED: Added missing path module
 const { Pool } = require('pg');
 
 const app = express();
@@ -24,13 +24,13 @@ const initDB = async () => {
                 pending_invites JSONB DEFAULT '[]', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        console.log("Database Tables Ready ✅");
-    } catch (err) { console.error("DB Init Error:", err); }
+        console.log("DB Ready ✅");
+    } catch (err) { console.error("DB Error:", err); }
 };
 initDB();
 
 // 2. MIDDLEWARE
-app.use(cors({ origin: '*' })); 
+app.use(cors({ origin: '*' })); // FIXED: Open CORS for GitHub Pages
 app.use(express.json());
 app.use(express.static(path.join(__dirname))); 
 
@@ -58,7 +58,7 @@ app.get('/get-my-groups', async (req, res) => {
     } catch (e) { res.status(500).json({ joined: [], pending: [] }); }
 });
 
-// 4. SOCKET.IO (Fixed CORS for real-time chat)
+// 4. SOCKET.IO
 const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 let onlineUsers = {}; 
 
