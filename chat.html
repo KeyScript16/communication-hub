@@ -2,70 +2,206 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Session</title>
     <link rel="stylesheet" href="css.css">
-    <title>Login</title>
+    <!-- Using CDN for better compatibility on Render -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <link rel="icon" type="image/png" href="favicon-32x32.png">
 </head>
 <body>
-    <div id="auth-container" style="text-align: center; margin-top: 100px;">
-        <h1>Login</h1>
-        <input type="email" id="login-email" placeholder="Email" style="display:block; margin: 10px auto; padding: 10px;">
-        <input type="password" id="login-pass" placeholder="Password" style="display:block; margin: 10px auto; padding: 10px;">
-        <button onclick="login()" style="padding: 10px 20px; background: #4ecca3; border: none; cursor: pointer;">Login</button>
-        <p><a href="#" onclick="alert('Contact Admin for reset')">Forgot Password?</a></p>
+    <div id="main-content" style="width: 500px; height: 80vh; display: flex; flex-direction: column;">
+        <h1 id="chat-header">Chat</h1>
+        <!-- TYPING ICON AREA -->
+        <div id="typing-indicator" style="height: 20px; font-size: 12px; color: #4ecca3; font-style: italic;"></div>
+        
+        <div id="message-history" style="flex-grow: 1; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 15px;"></div>
+        <!-- EMOJI BAR -->
+<div id="emoji-bar" style="margin-bottom: 10px; display: flex; gap: 10px; padding: 5px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+    <span onclick="addEmoji('🔥')" style="cursor:pointer; font-size: 20px; transition: 0.2s;" class="emoji-btn">🔥</span>
+    <span onclick="addEmoji('✨')" style="cursor:pointer; font-size: 20px; transition: 0.2s;" class="emoji-btn">✨</span>
+    <span onclick="addEmoji('😂')" style="cursor:pointer; font-size: 20px; transition: 0.2s;" class="emoji-btn">😂</span>
+    <span onclick="addEmoji('💯')" style="cursor:pointer; font-size: 20px; transition: 0.2s;" class="emoji-btn">💯</span>
+    <span onclick="addEmoji('👍')" style="cursor:pointer; font-size: 20px; transition: 0.2s;" class="emoji-btn">👍</span>
+    <span onclick="addEmoji('🚀')" style="cursor:pointer; font-size: 20px; transition: 0.2s;" class="emoji-btn">🚀</span>
+</div>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="chat-input" placeholder="Type a message..." style="margin: 0;">
+            <button id="send-btn" onclick="sendMessage()" style="width: 80px; margin: 0;">Send</button>
+        </div>
+        <button onclick="goBack()" style="background: none; color: #4ecca3; margin-top: 10px;">Back to Dashboard</button>
     </div>
 
     <script>
-        async function login() {
-    const emailInput = document.getElementById('login-email').value.trim();
-    const passInput = document.getElementById('login-pass').value;
-    const BASE_URL = 'https://crescendo-chat.onrender.com';
+        const BASE_URL = 'https://crescendo-chat.onrender.com';
+        const socket = io(BASE_URL);
+        const user = JSON.parse(sessionStorage.getItem("currentUser"));
+        const params = new URLSearchParams(window.location.search);
+        const friendEmail = params.get('with');
 
-    // 1. ADMIN BYPASS (Change "Admin" to "BenAdmin" or something unique)
-    // Admin bypass
-if (emailInput === "ALL_COWS_EAT_GRASS" && passInput === "Admin") {
-    sessionStorage.setItem("currentUser", JSON.stringify({
-        email: emailInput, 
-        username: "Admin Ben",
-        isAdmin: true // <--- ADD THIS LINE
-    }));
-    window.location.href = 'dashboard.html';
-    return;
+        // Audio setup
+        let audioCtx;
+
+        if (!user || !friendEmail) { window.location.href = 'index.html'; }
+        document.getElementById('chat-header').innerText = "Chat with " + friendEmail;
+        
+        // Signal online status
+        // Near the top of chat.html script
+socket.emit('go-online', { email: user.email, username: user.username });
+
+
+        const chatInput = document.getElementById('chat-input');
+        
+        // --- TYPING LOGIC ---
+        chatInput.addEventListener('input', () => {
+            socket.emit('typing', { 
+                to: friendEmail, 
+                fromName: user.username, 
+                isTyping: chatInput.value.length > 0 
+            });
+        });
+
+        socket.on('friend-typing', (data) => {
+            document.getElementById('typing-indicator').innerText = data.isTyping ? data.fromName + " is typing..." : "";
+        });
+
+        // --- MESSAGE LOGIC ---
+        socket.on('new-message', (data) => {
+            if (data.fromEmail === friendEmail) {
+                displayMessage(data.fromName, data.message);
+                playBell(); // Plays when friend sends a message
+            }
+        });
+
+        function sendMessage() {
+            const msg = chatInput.value;
+            if (msg && friendEmail) {
+                // Ensure audio is unlocked on first interaction
+                unlockAudio();
+                
+                socket.emit('private-message', { 
+                    to: friendEmail, 
+                    message: msg, 
+                    fromName: user.username, 
+                    fromEmail: user.email 
+                });
+                displayMessage("Me", msg);
+                chatInput.value = "";
+                socket.emit('typing', { to: friendEmail, isTyping: false });
+            }
+        }
+
+       function displayMessage(name, text) {
+    const history = document.getElementById('message-history');
+    const isMe = (name === "Me");
+    
+    // Create timestamp (e.g., 4:30 PM)
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const wrapper = document.createElement('div');
+    wrapper.classList.add('message-wrapper');
+    wrapper.classList.add(isMe ? 'me' : 'them');
+
+    wrapper.innerHTML = `
+        <div class="bubble">
+            <strong style="display:block; font-size:11px;">${name}</strong>
+            ${text}
+            <span class="timestamp">${timeStr}</span>
+        </div>
+    `;
+
+    history.appendChild(wrapper);
+    history.scrollTop = history.scrollHeight;
 }
 
 
-    // 2. REGULAR LOGIN (For your 'benrito16' test account and others)
-    try {
-        const response = await fetch(`${BASE_URL}/get-data`);
-        const allUsers = await response.json();
-
-        const userFound = allUsers.find(u => 
-            u.email.toLowerCase() === emailInput.toLowerCase() && 
-            u.password === passInput
-        );
-
-        if (userFound) {
-            sessionStorage.setItem("currentUser", JSON.stringify({
-                email: userFound.email, 
-                username: userFound.username,
-                isAdmin: false // Regular user
-            }));
-            window.location.href = 'dashboard.html';
-        } else {
-            alert("Account not found or wrong password.");
+        // --- AUDIO LOGIC ---
+        function unlockAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
         }
-    } catch (err) {
-        alert("Server is waking up... Try again in a few seconds.");
+
+        function playBell() {
+            unlockAudio();
+            if (!audioCtx) return;
+
+            try {
+                const notes = [587.33, 659.25, 880.00]; 
+                notes.forEach((freq, index) => {
+                    const o = audioCtx.createOscillator(); 
+                    const g = audioCtx.createGain();
+                    const start = audioCtx.currentTime + (index * 0.15);
+                    
+                    o.type = 'sine'; 
+                    o.frequency.setValueAtTime(freq, start);
+                    g.gain.setValueAtTime(0.1, start);
+                    g.gain.exponentialRampToValueAtTime(0.0001, start + 0.2);
+                    
+                    o.connect(g); 
+                    g.connect(audioCtx.destination);
+                    o.start(start); 
+                    o.stop(start + 0.2);
+                });
+            } catch(e) { console.log("Audio play blocked", e); }
+        }
+
+        // Unlock audio on any click to prevent browser blocking
+        document.addEventListener('click', unlockAudio, { once: true });
+
+        // --- SESSION LOGIC ---
+        function goBack() {
+    socket.emit('leave-chat', friendEmail);
+    window.location.href = 'dashboard.html'; 
+}
+
+
+        socket.on('chat-ended-by-friend', () => {
+            document.body.innerHTML = `
+                <div id="main-content" style="text-align:center; padding-top:100px;">
+                    <h1>Chat Ended</h1>
+                    <p>Your friend left the conversation.</p>
+                    <button onclick="window.location.href='dashboard.html'">Back to Dashboard</button>
+                </div>`;
+        });
+        function addEmoji(emoji) {
+    const input = document.getElementById('chat-input');
+    input.value += emoji; // Adds the emoji to whatever is already typed
+    input.focus(); // Keeps the cursor in the box so you can keep typing
+    
+    // Trigger the typing indicator so your friend knows you're active
+    socket.emit('typing', { 
+        to: friendEmail, 
+        fromName: user.username, 
+        isTyping: true 
+    });
+}
+        async function updateHeader() {
+    const response = await fetch(`${BASE_URL}/get-data`);
+    const allUsers = await response.json();
+    const friend = allUsers.find(u => u.email === friendEmail);
+    if (friend) {
+        document.getElementById('chat-header').innerText = "Chat with " + friend.username;
     }
 }
+updateHeader(); // Run this when the page loads
 
 
-        // Enter key support
-        document.addEventListener("keypress", (e) => { if(e.key === "Enter") login(); });
+
+        document.addEventListener("keypress", (e) => { 
+            if(e.key === "Enter") sendMessage(); 
+        });
+
     </script>
 </body>
 </html>
+
+
+
+
 
 
 
