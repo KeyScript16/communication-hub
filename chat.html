@@ -4,27 +4,18 @@
     <meta charset="UTF-8">
     <title>Chat Session</title>
     <link rel="stylesheet" href="css.css">
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io"></script>
 </head>
 <body>
     <div id="main-content" style="width: 500px; height: 80vh; display: flex; flex-direction: column;">
         <h1 id="chat-header">Loading...</h1>
-        <div id="typing-indicator" style="height: 20px; font-size: 12px; color: #4ecca3;"></div>
         <div id="message-history" style="flex-grow: 1; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px;"></div>
-        
-        <div id="emoji-bar" style="margin: 10px 0; display: flex; gap: 10px;">
-            <span onclick="addEmoji('🔥')" style="cursor:pointer; font-size: 20px;">🔥</span>
-            <span onclick="addEmoji('😂')" style="cursor:pointer; font-size: 20px;">😂</span>
-            <span onclick="addEmoji('👍')" style="cursor:pointer; font-size: 20px;">👍</span>
-        </div>
-
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
             <input type="text" id="chat-input" placeholder="Type a message...">
             <button onclick="sendMessage()">Send</button>
         </div>
         <button onclick="goBack()" style="background: none; color: #4ecca3; margin-top: 10px;">Back to Dashboard</button>
     </div>
-
     <script>
         const BASE_URL = 'https://crescendo-chat.onrender.com';
         const socket = io(BASE_URL);
@@ -34,7 +25,6 @@
 
         if (!user || !friendEmail) window.location.href = 'index.html';
 
-        // FIX: Display Username in Header
         async function updateHeader() {
             const response = await fetch(`${BASE_URL}/get-data`);
             const allUsers = await response.json();
@@ -43,28 +33,14 @@
         }
         updateHeader();
 
-        // FIX: Audio Context Unlock
         let audioCtx;
-        function unlockAudio() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-        }
+        function unlockAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
         document.addEventListener('click', unlockAudio, { once: true });
-
-        function playBell() {
-            if (!audioCtx) return;
-            const o = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            o.frequency.setValueAtTime(880, audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
-            o.connect(g); g.connect(audioCtx.destination);
-            o.start(); o.stop(audioCtx.currentTime + 0.5);
-        }
 
         socket.on('new-message', (data) => {
             if (data.fromEmail.toLowerCase() === friendEmail.toLowerCase()) {
                 displayMessage(data.fromName, data.message);
-                playBell();
+                if (audioCtx) { /* Add play bell logic here */ }
             }
         });
 
@@ -85,11 +61,12 @@
             history.scrollTop = history.scrollHeight;
         }
 
-        function addEmoji(emoji) { document.getElementById('chat-input').value += emoji; }
         function goBack() { window.location.href = 'dashboard.html'; }
     </script>
 </body>
 </html>
+
+
 
 
 
