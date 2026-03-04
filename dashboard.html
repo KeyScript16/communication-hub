@@ -2,34 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Crescendo Dashboard</title>
+    <title>Dashboard</title>
     <link rel="stylesheet" href="css.css">
     <script src="https://cdn.socket.io"></script>
 </head>
 <body style="display: flex; flex-direction: column; align-items: center; padding: 20px;">
-    
-    <div id="dashboard-header" style="margin-bottom: 30px;">
-        <h1>Welcome, <span id="user-display"></span>!</h1>
+    <h1>Welcome, <span id="user-display"></span>!</h1>
+
+    <!-- Friends Section (Filtered) -->
+    <div style="width: 100%; max-width: 500px; margin-top: 30px;">
+        <h2>Direct Chats</h2>
+        <div id="friends-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
     </div>
 
-    <!-- FRIENDS SECTION -->
-    <div class="section-container" style="width: 100%; max-width: 500px; margin-bottom: 40px;">
-        <h2 style="border-bottom: 2px solid #4ecca3; padding-bottom: 10px;">Direct Chats</h2>
-        <div id="friends-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
-            <p>Searching for friends...</p>
-        </div>
+    <!-- Clubs Section -->
+    <div style="width: 100%; max-width: 500px; margin-top: 30px;">
+        <h2>My Clubs</h2>
+        <div id="clubs-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        <button onclick="window.location.href='create-club.html'" style="margin-top: 15px; width: 100%; padding: 10px; background: #4ecca3; border: none; cursor: pointer;">+ Create New Club</button>
     </div>
 
-    <!-- CLUBS/GROUPS SECTION -->
-    <div class="section-container" style="width: 100%; max-width: 500px;">
-        <h2 style="border-bottom: 2px solid #4ecca3; padding-bottom: 10px;">My Clubs</h2>
-        <div id="clubs-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
-            <p>Loading clubs...</p>
-        </div>
-        <button onclick="alert('Club creation coming soon!')" style="margin-top: 15px; width: 100%; padding: 10px; background: #4ecca3; color: #1a1a2e; font-weight: bold; border: none; border-radius: 5px; cursor: pointer;">+ Create New Club</button>
-    </div>
-
-    <button onclick="logout()" style="margin-top: 50px; background: #ff4e4e; color: white; border: none; padding: 12px 25px; border-radius: 5px; cursor: pointer; font-weight: bold;">Logout</button>
+    <button onclick="logout()" style="margin-top: 50px; background: #ff4e4e; color: white; border: none; padding: 10px 20px; cursor: pointer;">Logout</button>
 
     <script>
         const BASE_URL = 'https://crescendo-chat.onrender.com';
@@ -39,57 +32,46 @@
         if (!user) window.location.href = 'index.html';
         document.getElementById('user-display').innerText = user.username;
 
-        // 1. FETCH FRIENDS (USERS)
-        async function fetchFriends() {
-            const response = await fetch(`${BASE_URL}/get-data`);
-            const allUsers = await response.json();
-            const friendsList = document.getElementById('friends-list');
-            friendsList.innerHTML = "";
+        async function init() {
+            // Fetch User Data for Friends List
+            const resData = await fetch(`${BASE_URL}/get-data`);
+            const allUsers = await resData.json();
+            const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+            const myFriendsEmails = me?.friends || []; // Assumes a 'friends' array in your DB
 
-            const others = allUsers.filter(u => u.email.toLowerCase() !== user.email.toLowerCase());
-            
-            others.forEach(friend => {
+            const friendsDiv = document.getElementById('friends-list');
+            friendsDiv.innerHTML = "";
+            allUsers.filter(u => myFriendsEmails.includes(u.email)).forEach(f => {
                 const div = document.createElement('div');
+                div.className = "friend-item";
                 div.style = "background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(78, 204, 163, 0.2);";
-                
                 div.innerHTML = `
-                    <span>${friend.username}</span>
+                    <span>${f.username}</span>
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <span id="dot-${friend.email.replace(/[@.]/g, '')}" style="height: 10px; width: 10px; background: gray; border-radius: 50%;"></span>
-                        <button onclick="window.location.href='chat.html?with=${friend.email}'" style="padding: 5px 15px; background: #4ecca3; border: none; border-radius: 5px; cursor: pointer;">Chat</button>
+                        <span id="dot-${f.email.replace(/[@.]/g, '')}" class="status-dot" style="height: 10px; width: 10px; background: gray; border-radius: 50%;"></span>
+                        <button onclick="window.location.href='chat.html?with=${f.email}'" style="padding: 5px 10px; background: #4ecca3; border: none; cursor: pointer;">Chat</button>
                     </div>
                 `;
-                friendsList.appendChild(div);
+                friendsDiv.appendChild(div);
             });
-        }
 
-        // 2. FETCH CLUBS (GROUPS)
-        async function fetchClubs() {
-            const response = await fetch(`${BASE_URL}/get-my-groups?email=${user.email}`);
-            const { joined, pending } = await response.json();
-            const clubsList = document.getElementById('clubs-list');
-            clubsList.innerHTML = "";
-
-            if (joined.length === 0) clubsList.innerHTML = "<p style='opacity: 0.5;'>No clubs joined yet.</p>";
-
-            joined.forEach(group => {
+            // Fetch Clubs
+            const resClubs = await fetch(`${BASE_URL}/get-my-groups?email=${user.email}`);
+            const { joined } = await resClubs.json();
+            const clubsDiv = document.getElementById('clubs-list');
+            clubsDiv.innerHTML = "";
+            (joined || []).forEach(g => {
                 const div = document.createElement('div');
-                div.style = "background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; border: 1px solid #4ecca3;";
-                div.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong>${group.group_name}</strong>
-                        <button onclick="alert('Entering club chat...')" style="padding: 5px 15px; background: #4ecca3; border: none; border-radius: 5px; cursor: pointer;">Enter</button>
-                    </div>
-                `;
-                clubsList.appendChild(div);
+                div.style = "background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; display: flex; justify-content: space-between; border: 1px solid #4ecca3;";
+                div.innerHTML = `<span>${g.group_name}</span><button onclick="window.location.href='club-chat.html?id=${g.id}'" style="padding: 5px 10px; background: #4ecca3; border: none; cursor: pointer;">Enter</button>`;
+                clubsDiv.appendChild(div);
             });
         }
 
-        // 3. SOCKETS (Real-time Online Dots)
         socket.on('update-online-list', (onlineEmails) => {
-            document.querySelectorAll('[ id^="dot-" ]').forEach(dot => dot.style.background = "gray");
-            onlineEmails.forEach(email => {
-                const dot = document.getElementById(`dot-${email.toLowerCase().replace(/[@.]/g, '')}`);
+            document.querySelectorAll('.status-dot').forEach(dot => dot.style.background = "gray");
+            onlineEmails.forEach(e => {
+                const dot = document.getElementById(`dot-${e.toLowerCase().replace(/[@.]/g, '')}`);
                 if (dot) dot.style.background = "#4ecca3";
             });
         });
@@ -100,9 +82,7 @@
             window.location.href = 'index.html';
         }
 
-        // Initial Load
-        fetchFriends();
-        fetchClubs();
+        init();
         socket.emit('go-online', { email: user.email, username: user.username });
     </script>
 </body>
