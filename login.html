@@ -2,10 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Crescendo</title>
     <link rel="stylesheet" href="css.css">
-    <title>Login</title>
-    <link rel="icon" type="image/png" href="favicon-32x32.png">
 </head>
 <body>
     <div id="auth-container" style="text-align: center; margin-top: 100px;">
@@ -13,59 +11,40 @@
         <input type="email" id="login-email" placeholder="Email" style="display:block; margin: 10px auto; padding: 10px;">
         <input type="password" id="login-pass" placeholder="Password" style="display:block; margin: 10px auto; padding: 10px;">
         <button onclick="login()" style="padding: 10px 20px; background: #4ecca3; border: none; cursor: pointer;">Login</button>
-        <p><a href="#" onclick="alert('Contact Admin for reset')">Forgot Password?</a></p>
     </div>
 
     <script>
         async function login() {
-    const emailInput = document.getElementById('login-email').value.trim();
-    const passInput = document.getElementById('login-pass').value;
-    const BASE_URL = 'https://crescendo-chat.onrender.com';
+            const emailInput = document.getElementById('login-email').value.trim();
+            const passInput = document.getElementById('login-pass').value;
+            const BASE_URL = 'https://crescendo-chat.onrender.com';
 
-    // 1. ADMIN BYPASS (Change "Admin" to "BenAdmin" or something unique)
-    // Admin bypass
-if (emailInput === "ALL_COWS_EAT_GRASS" && passInput === "Admin") {
-    sessionStorage.setItem("currentUser", JSON.stringify({
-        email: emailInput, 
-        username: "Admin Ben",
-        isAdmin: true // <--- ADD THIS LINE
-    }));
-    window.location.href = 'dashboard.html';
-    return;
-}
+            // Admin Bypass
+            if (emailInput === "ALL_COWS_EAT_GRASS" && passInput === "Admin") {
+                sessionStorage.setItem("currentUser", JSON.stringify({ email: emailInput, username: "Admin Ben", isAdmin: true }));
+                window.location.href = 'dashboard.html';
+                return;
+            }
 
+            try {
+                const response = await fetch(`${BASE_URL}/get-data`);
+                const allUsers = await response.json();
+                const userFound = allUsers.find(u => u.email.toLowerCase() === emailInput.toLowerCase() && u.password === passInput);
 
-    // 2. REGULAR LOGIN (For your 'benrito16' test account and others)
-    try {
-        const response = await fetch(`${BASE_URL}/get-data`);
-        const allUsers = await response.json();
-
-        const userFound = allUsers.find(u => 
-            u.email.toLowerCase() === emailInput.toLowerCase() && 
-            u.password === passInput
-        );
-
-        if (userFound) {
-            sessionStorage.setItem("currentUser", JSON.stringify({
-                email: userFound.email, 
-                username: userFound.username,
-                isAdmin: false // Regular user
-            }));
-            window.location.href = 'dashboard.html';
-        } else {
-            alert("Account not found or wrong password.");
+                if (userFound) {
+                    sessionStorage.setItem("currentUser", JSON.stringify({ email: userFound.email, username: userFound.username, isAdmin: false }));
+                    window.location.href = 'dashboard.html';
+                } else {
+                    alert("Wrong password or account not found.");
+                }
+            } catch (err) { alert("Server waking up... try again in 5 seconds."); }
         }
-    } catch (err) {
-        alert("Server is waking up... Try again in a few seconds.");
-    }
-}
-
-
-        // Enter key support
         document.addEventListener("keypress", (e) => { if(e.key === "Enter") login(); });
     </script>
 </body>
 </html>
+
+
 
 
 
