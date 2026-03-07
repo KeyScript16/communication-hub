@@ -2,27 +2,38 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
+    <title>Crescendo Dashboard</title>
+    <!-- 1. The exact CSS link from your index.html -->
     <link rel="stylesheet" href="css.css">
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- 2. The FIXED Socket.io link (no MIME error) -->
+    <script src="https://cdn.socket.io"></script>
+    <link rel="icon" type="image/png" href="favicon-32x32.png">
 </head>
-<body style="display: flex; flex-direction: column; align-items: center; padding: 20px;">
-    <h1>Welcome, <span id="user-display"></span>!</h1>
+<body>
+    <!-- 3. Wrapping in auth-container gives you the outline/blur back -->
+    <div id="auth-container" style="width: 450px;"> <!-- Made slightly wider for lists -->
+        <h1>Communication</h1>
+        <p style="margin-bottom: 20px;">Welcome back, <span id="user-display" style="color: #4ecca3;"></span></p>
 
-    <!-- Friends Section (Filtered) -->
-    <div style="width: 100%; max-width: 500px; margin-top: 30px;">
-        <h2>Direct Chats</h2>
-        <div id="friends-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        <!-- FRIENDS SECTION -->
+        <div style="text-align: left; margin-bottom: 25px;">
+            <h3 style="font-size: 14px; text-transform: uppercase; color: #4ecca3; margin-bottom: 10px;">Friends</h3>
+            <div id="friends-list" style="display: flex; flex-direction: column; gap: 8px;">
+                <p>Loading friends...</p>
+            </div>
+        </div>
+
+        <!-- CLUBS SECTION -->
+        <div style="text-align: left; margin-bottom: 20px;">
+            <h3 style="font-size: 14px; text-transform: uppercase; color: #4ecca3; margin-bottom: 10px;">My Clubs</h3>
+            <div id="clubs-list" style="display: flex; flex-direction: column; gap: 8px;">
+                <p>Loading clubs...</p>
+            </div>
+            <button onclick="window.location.href='create-club.html'" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid #4ecca3; font-size: 12px; padding: 8px;">+ Create Club</button>
+        </div>
+
+        <button onclick="logout()" style="background: #ff4e4e; color: white; margin-top: 30px;">Logout</button>
     </div>
-
-    <!-- Clubs Section -->
-    <div style="width: 100%; max-width: 500px; margin-top: 30px;">
-        <h2>My Clubs</h2>
-        <div id="clubs-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
-        <button onclick="window.location.href='create-club.html'" style="margin-top: 15px; width: 100%; padding: 10px; background: #4ecca3; border: none; cursor: pointer;">+ Create New Club</button>
-    </div>
-
-    <button onclick="logout()" style="margin-top: 50px; background: #ff4e4e; color: white; border: none; padding: 10px 20px; cursor: pointer;">Logout</button>
 
     <script>
         const BASE_URL = 'https://crescendo-chat.onrender.com';
@@ -33,43 +44,59 @@
         document.getElementById('user-display').innerText = user.username;
 
         async function init() {
-            // Fetch User Data for Friends List
-            const resData = await fetch(`${BASE_URL}/get-data`);
-            const allUsers = await resData.json();
-            const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
-            const myFriendsEmails = me?.friends || []; // Assumes a 'friends' array in your DB
+            try {
+                // Fetch All Data
+                const resData = await fetch(`${BASE_URL}/get-data`);
+                const allUsers = await resData.json();
+                
+                // Find current user's friends list
+                const me = allUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+                const myFriends = me?.friends || [];
 
-            const friendsDiv = document.getElementById('friends-list');
-            friendsDiv.innerHTML = "";
-            allUsers.filter(u => myFriendsEmails.includes(u.email)).forEach(f => {
-                const div = document.createElement('div');
-                div.className = "friend-item";
-                div.style = "background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(78, 204, 163, 0.2);";
-                div.innerHTML = `
-                    <span>${f.username}</span>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span id="dot-${f.email.replace(/[@.]/g, '')}" class="status-dot" style="height: 10px; width: 10px; background: gray; border-radius: 50%;"></span>
-                        <button onclick="window.location.href='chat.html?with=${f.email}'" style="padding: 5px 10px; background: #4ecca3; border: none; cursor: pointer;">Chat</button>
-                    </div>
-                `;
-                friendsDiv.appendChild(div);
-            });
+                // Render Friends
+                const friendsDiv = document.getElementById('friends-list');
+                friendsDiv.innerHTML = "";
+                
+                const filteredFriends = allUsers.filter(u => myFriends.includes(u.email));
+                
+                if(filteredFriends.length === 0) {
+                    friendsDiv.innerHTML = "<p style='font-size: 12px;'>No friends added yet.</p>";
+                }
 
-            // Fetch Clubs
-            const resClubs = await fetch(`${BASE_URL}/get-my-groups?email=${user.email}`);
-            const { joined } = await resClubs.json();
-            const clubsDiv = document.getElementById('clubs-list');
-            clubsDiv.innerHTML = "";
-            (joined || []).forEach(g => {
-                const div = document.createElement('div');
-                div.style = "background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; display: flex; justify-content: space-between; border: 1px solid #4ecca3;";
-                div.innerHTML = `<span>${g.group_name}</span><button onclick="window.location.href='club-chat.html?id=${g.id}'" style="padding: 5px 10px; background: #4ecca3; border: none; cursor: pointer;">Enter</button>`;
-                clubsDiv.appendChild(div);
-            });
+                filteredFriends.forEach(f => {
+                    const div = document.createElement('div');
+                    div.style = "display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;";
+                    div.innerHTML = `
+                        <span style="font-size: 14px;">${f.username}</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span id="dot-${f.email.replace(/[@.]/g, '')}" style="height: 8px; width: 8px; background: gray; border-radius: 50%;"></span>
+                            <button onclick="window.location.href='chat.html?with=${f.email}'" style="width: auto; padding: 5px 12px; margin: 0; font-size: 12px;">Chat</button>
+                        </div>
+                    `;
+                    friendsDiv.appendChild(div);
+                });
+
+                // Fetch Clubs
+                const resClubs = await fetch(`${BASE_URL}/get-my-groups?email=${user.email}`);
+                const { joined } = await resClubs.json();
+                const clubsDiv = document.getElementById('clubs-list');
+                clubsDiv.innerHTML = "";
+
+                if(!joined || joined.length === 0) {
+                    clubsDiv.innerHTML = "<p style='font-size: 12px;'>No clubs joined.</p>";
+                } else {
+                    joined.forEach(g => {
+                        const div = document.createElement('div');
+                        div.style = "display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border-left: 3px solid #4ecca3;";
+                        div.innerHTML = `<span style="font-size: 14px;">${g.group_name}</span><button onclick="window.location.href='club-chat.html?id=${g.id}'" style="width: auto; padding: 5px 12px; margin: 0; font-size: 12px;">Enter</button>`;
+                        clubsDiv.appendChild(div);
+                    });
+                }
+            } catch(e) { console.log("Init error", e); }
         }
 
         socket.on('update-online-list', (onlineEmails) => {
-            document.querySelectorAll('.status-dot').forEach(dot => dot.style.background = "gray");
+            document.querySelectorAll('[id^="dot-"]').forEach(dot => dot.style.background = "gray");
             onlineEmails.forEach(e => {
                 const dot = document.getElementById(`dot-${e.toLowerCase().replace(/[@.]/g, '')}`);
                 if (dot) dot.style.background = "#4ecca3";
@@ -87,4 +114,3 @@
     </script>
 </body>
 </html>
-
